@@ -212,3 +212,4 @@ body.guest .host-only, body:not(.guest) .guest-only { display: none; }
 .mp-option small { display: block; font-weight: 400; font-size: 13px; opacity: .8; }
 #mp-host .hint { margin: 0 0 6px; }
 #menu-join { margin-top: 6px; }
+.turbo.disabled { opacity: .35; }

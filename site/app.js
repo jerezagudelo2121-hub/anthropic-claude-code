@@ -289,7 +289,10 @@ function updatePressed(points) {
   pressedNow = next;
   touchMask = 0;
   for (const name of next) if (name in BUTTONS) touchMask |= 1 << BUTTONS[name];
-  setFastForward(next.has("FF"));
+  const hold = next.has("FF");
+  if (hold && !ffHold && !ffAllowed()) toast("La velocidad rápida no funciona en multijugador");
+  ffHold = hold;
+  updateFastForward();
   applyButtons();
 }
 
@@ -356,12 +359,28 @@ function pollGamepads() {
   }
 }
 
-let fastForward = false;
-function setFastForward(on) {
-  if (!engine || on === fastForward) return;
-  fastForward = on;
-  engine.fastForward = on;
+// Avance rápido: botón ⏩ mantenido o interruptor del menú. En multijugador se desactiva,
+// porque la otra consola seguiría a velocidad normal y se perdería la conexión.
+let ffHold = false, ffToggle = false;
+
+function linkActive() {
+  return net.mode === "link" && (net.role === "host" || net.role === "guest");
+}
+
+function ffAllowed() {
+  return !net.role;
+}
+
+function updateFastForward() {
+  const allowed = ffAllowed();
+  if (!allowed) ffToggle = false;
+  const on = !!engine && allowed && (ffHold || ffToggle);
+  if (engine) engine.fastForward = on;
   padButtons.FF.classList.toggle("on", on);
+  padButtons.FF.classList.toggle("disabled", !allowed);
+  const btn = $("[data-action=ff-toggle]");
+  btn.textContent = !allowed ? "⏩ No disponible online" : ffToggle ? "⏩ Velocidad x1" : "⏩ Velocidad x2";
+  btn.disabled = !allowed;
 }
 
 /* ---------- Menú ---------- */
@@ -407,6 +426,7 @@ $("#slots").addEventListener("click", async (e) => {
       toast(`Guardado en la ranura ${saveSlot}`);
       renderSlots();
     } else if (loadSlot) {
+      if (linkActive()) return toast("Termina el multijugador para cargar una ranura", 3500);
       const saved = await db.get("states", stateKey(loadSlot));
       if (!saved) return;
       engine.loadState(saved.data);
@@ -431,11 +451,14 @@ const actions = {
     engine.setMuted(!engine.muted);
     btn.textContent = engine.muted ? "🔇 Sin sonido" : "🔊 Sonido";
   },
-  "ff-toggle": (btn) => {
-    setFastForward(!fastForward);
-    btn.textContent = fastForward ? "⏩ Velocidad x1" : "⏩ Velocidad x2";
+  "ff-toggle": () => {
+    if (!ffAllowed()) return toast("La velocidad rápida no funciona en multijugador");
+    ffToggle = !ffToggle;
+    updateFastForward();
+    closeMenu();
   },
   restart: () => {
+    if (linkActive()) return toast("Termina el multijugador para reiniciar", 3500);
     if (engine && confirm("¿Reiniciar el juego? Se perderá lo que no hayas guardado.")) {
       engine.reset();
       closeMenu();
@@ -450,7 +473,10 @@ const actions = {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   },
-  "import-save": () => $("#sav-input").click(),
+  "import-save": () => {
+    if (linkActive()) return toast("Termina el multijugador para importar una partida", 3500);
+    $("#sav-input").click();
+  },
   fullscreen: () => {
     const el = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -546,6 +572,7 @@ const net = {
   },
 
   renderSession() {
+    updateFastForward();
     const active = !!this.role;
     $("#mp-host").hidden = active;
     $("#mp-session").hidden = !active;
@@ -575,7 +602,11 @@ const net = {
     setNetStatus("Conectando…", "wait");
 
     const peer = this.peer = this.newPeer(PEER_PREFIX + this.code);
+    let started = false;
     peer.on("open", () => {
+      // PeerJS vuelve a emitir "open" al reconectar: la sesión del núcleo solo se inicia una vez.
+      if (started) return;
+      started = true;
       $("#mp-code").textContent = this.code;
       setNetStatus("Esperando amigo · " + this.code, "wait");
       if (mode === "link") {
@@ -732,6 +763,7 @@ const net = {
     if (!m) return;
     if (m.t === "hello") {
       this.mode = m.mode;
+      this.hostGame = m.game;
       if (m.mode === "screen") this.becomeViewer(m);
       else if (engine) this.sendReady();
       else this.waitForRom(m.game);
@@ -747,7 +779,9 @@ const net = {
         };
         engine.netStart(m.id);
         setNetStatus(`🔗 Conectado · J${m.id + 1}`, "ok");
-        toast("¡Conectado! Ya podéis usar el modo multijugador del juego.", 4000);
+        toast(this.hostGame && this.hostGame !== romName
+          ? `Conectado. Ojo: tu ROM («${romName}») y la de tu amigo («${this.hostGame}») tienen nombres distintos; tienen que ser la misma versión.`
+          : "¡Conectado! Ya podéis usar el modo multijugador del juego.", 6000);
       }
       this.renderSession();
     } else if (m.t === "ctl") {
