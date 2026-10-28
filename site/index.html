@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>GBA Web</title>
+<meta name="description" content="Emulador de Game Boy Advance en el navegador, con multijugador online.">
+<meta name="theme-color" content="#1b1b2f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GBA Web">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- Pantalla de inicio -->
+<section id="home" class="view">
+  <div class="home-card">
+    <div class="logo">GBA<span>web</span></div>
+    <p class="tagline">Emulador de Game Boy Advance en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
+
+    <label class="btn primary big" for="rom-input">🎮 Cargar ROM (.gba / .zip)</label>
+    <input id="rom-input" type="file" hidden>
+
+    <div id="recent" class="recent" hidden>
+      <h3>Jugados recientemente</h3>
+      <ul id="recent-list"></ul>
+    </div>
+
+    <div class="divider"><span>o</span></div>
+
+    <form id="join-form" class="join">
+      <h3>Unirme a la partida de un amigo</h3>
+      <div class="join-row">
+        <input id="join-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
+               maxlength="6" placeholder="CÓDIGO" aria-label="Código de la partida">
+        <button class="btn" type="submit">Unirme</button>
+      </div>
+      <p class="hint">Tu amigo no necesita tener la ROM: ve la partida en directo y juega con su propio mando.</p>
+    </form>
+
+    <details class="help">
+      <summary>¿Cómo instalarlo en el iPhone?</summary>
+      <p>En Safari pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>. Se abrirá a pantalla completa, como una app.</p>
+      <p>Las partidas guardadas se quedan en tu iPhone (dentro del navegador). Tus ROMs nunca se suben a internet.</p>
+    </details>
+  </div>
+</section>
+
+<!-- Consola -->
+<section id="console" class="view" hidden>
+  <header class="topbar">
+    <button id="btn-menu" class="icon-btn" aria-label="Menú">☰</button>
+    <div id="game-title" class="game-title"></div>
+    <div id="net-status" class="net-pill" hidden></div>
+  </header>
+
+  <div class="screen-wrap">
+    <div id="screen" class="screen">
+      <div id="game"></div>
+      <video id="remote-video" playsinline autoplay muted hidden></video>
+      <div id="screen-msg" class="screen-msg" hidden></div>
+    </div>
+  </div>
+
+  <div id="pad" class="pad" aria-label="Mando">
+    <div class="shoulder l" data-btn="L">L</div>
+    <div class="shoulder r" data-btn="R">R</div>
+    <div class="dpad" data-dpad>
+      <div class="arm up"></div><div class="arm down"></div><div class="arm left"></div><div class="arm right"></div><div class="hub"></div>
+    </div>
+    <div class="ab">
+      <div class="face b" data-btn="B">B</div>
+      <div class="face a" data-btn="A">A</div>
+    </div>
+    <div class="meta">
+      <div class="pill" data-btn="SELECT">SELECT</div>
+      <div class="pill" data-btn="START">START</div>
+    </div>
+    <div class="turbo" data-action="ff" aria-label="Avance rápido">⏩</div>
+  </div>
+</section>
+
+<!-- Menú -->
+<div id="menu" class="sheet" hidden>
+  <div class="sheet-body">
+    <h2>Menú</h2>
+    <div class="host-only">
+      <h3>Guardado rápido</h3>
+      <div class="slots" id="slots"></div>
+      <h3>Opciones</h3>
+      <div class="grid">
+        <button class="btn" data-action="mute">🔊 Sonido</button>
+        <button class="btn" data-action="ff-toggle">⏩ Velocidad x2</button>
+        <button class="btn" data-action="restart">🔄 Reiniciar</button>
+        <button class="btn" data-action="export-save">💾 Exportar .sav</button>
+        <button class="btn" data-action="import-save">📂 Importar .sav</button>
+        <button class="btn" data-action="fullscreen">⛶ Pantalla completa</button>
+      </div>
+      <input id="sav-input" type="file" hidden>
+      <h3>Multijugador online</h3>
+      <div id="mp-host">
+        <button class="btn primary" data-action="host">👥 Jugar con un amigo</button>
+      </div>
+      <div id="mp-session" hidden>
+        <p>Código de la partida:</p>
+        <div class="code" id="mp-code">------</div>
+        <div class="grid">
+          <button class="btn primary" data-action="share">📤 Enviar invitación</button>
+          <button class="btn" data-action="copy">📋 Copiar enlace</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
+        <button class="btn danger" data-action="stop-host">Terminar multijugador</button>
+      </div>
+    </div>
+    <div class="guest-only">
+      <p>Estás jugando en la partida de tu amigo. El juego, el sonido y las partidas guardadas los controla quien invitó.</p>
+      <button class="btn" data-action="unmute-remote">🔊 Activar sonido</button>
+    </div>
+    <div class="grid">
+      <button class="btn danger" data-action="quit">⏏ Salir</button>
+      <button class="btn primary" data-action="close-menu">Volver al juego</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/peerjs/peerjs.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
