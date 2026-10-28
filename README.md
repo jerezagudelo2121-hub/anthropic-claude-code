@@ -6,14 +6,16 @@ Incluye **multijugador online** para jugar con un amigo.
 
 ## Qué tiene
 
-- Motor **mGBA** (el mismo que usan los mejores emuladores de Android), compilado a WebAssembly.
+- Motor **gpSP** (el núcleo de RetroArch que usa el multijugador de Pokémon Quetzal),
+  compilado a WebAssembly. Funciona en Safari sin instalar nada.
 - Mando táctil tipo Game Boy: cruceta con diagonales, A, B, L, R, START, SELECT y botón
   de avance rápido ⏩ (mantener pulsado). Se puede deslizar el dedo entre botones.
 - Vista vertical y horizontal.
-- **Partidas guardadas automáticas** (las del propio juego) cada 30 s y al salir de Safari.
+- **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
 - **3 ranuras de guardado rápido** (save states), velocidad x2, silenciar, reiniciar.
 - Exportar / importar el archivo `.sav` (por ejemplo, para pasar tu partida del Android).
 - Recuerda los últimos 5 juegos para no tener que buscar la ROM cada vez.
+- BIOS de GBA opcional (`gba_bios.bin`).
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.
 
@@ -25,18 +27,29 @@ Incluye **multijugador online** para jugar con un amigo.
 
 ## Multijugador con un amigo
 
-1. Tú cargas el juego y abres el menú **☰ → Jugar con un amigo**.
-2. Aparece un código de 6 letras. Pulsa **Enviar invitación** (WhatsApp, iMessage…).
-3. Tu amigo abre el enlace (o escribe el código en la página de inicio). **No necesita la ROM.**
-4. Tu amigo ve el juego en directo con sonido y puede usar su propio mando.
-   Desde el menú puedes desactivar sus controles cuando quieras (por turnos).
+Menú **☰ → Multijugador online**. Hay dos modos:
 
-> **Importante:** funciona como si los dos compartierais **una misma Game Boy** (ideal para
-> jugar por turnos, cooperativo o ayudar en una zona difícil). No es un cable link entre dos
-> consolas, así que los intercambios o combates Pokémon entre dos partidas distintas no son
-> posibles: ningún emulador web lo permite hoy en día.
+### 🔗 Jugar juntos (cada uno con su partida)
 
-La conexión es directa entre los dos móviles (WebRTC). Para encontrarse usan el servidor
+Cada uno juega en **su propio móvil, con su propia partida y su propio equipo**, y las dos
+consolas se conectan como con el **cable link / adaptador inalámbrico** de la GBA. Es lo que
+usa el multijugador de **Pokémon Quetzal** (y los combates/intercambios de Pokémon).
+
+1. Los dos necesitáis **la misma ROM** (misma versión) y abrir esta web.
+2. Uno carga su juego y pulsa **Jugar juntos**. Sale un código; pulsa **Enviar invitación**.
+3. El otro abre el enlace (o escribe el código), **carga su ROM** y queda conectado.
+4. Dentro del juego, entrad al modo multijugador como haríais con RetroArch.
+
+Funciona como el netplay de RetroArch con gpSP: el núcleo elige solo el modo correcto
+(cable link de Pokémon para hacks como Quetzal, adaptador inalámbrico para Esmeralda/Rojo Fuego).
+No se puede conectar con RetroArch: los dos jugadores tienen que usar esta web.
+
+### 📺 Compartir mi pantalla
+
+Tu amigo ve tu juego en directo con sonido y puede usar su mando en tu partida (como pasarse
+la consola). No necesita la ROM. Puedes desactivar sus controles cuando quieras.
+
+La conexión es directa entre los móviles (WebRTC). Para encontrarse usan el servidor
 público y gratuito de PeerJS. En algunas redes móviles muy restrictivas la conexión directa
 puede fallar; en ese caso probad con Wi‑Fi, o añadid un servidor TURN en `ICE_SERVERS`
 (`site/app.js`).
@@ -47,7 +60,7 @@ puede fallar; en ese caso probad con Wi‑Fi, o añadid un servidor TURN en `ICE
 | --- | --- |
 | Cruceta | Flechas |
 | A / B | Z / X |
-| L / R | Q / E |
+| L / R | Q / E (o A / S) |
 | START / SELECT | Enter / V |
 
 También funcionan los mandos Bluetooth (PlayStation, Xbox…) conectados al iPhone.
@@ -65,10 +78,23 @@ Netlify, Cloudflare Pages, Vercel… solo hay que subir la carpeta `site/`.
 
 Para probarlo en local: `cd site && python3 -m http.server 8000` y abre http://localhost:8000.
 
+## Cómo está hecho
+
+- `site/` — la web estática (HTML/CSS/JS). `engine.js` ejecuta el núcleo; `app.js` es la interfaz
+  y el multijugador.
+- `site/gpsp/gpsp.wasm` — gpSP compilado a WebAssembly con `wasm/build.sh` (clang + wasm-ld,
+  sin Emscripten). `wasm/frontend.c` es un frontend libretro mínimo que expone vídeo, audio,
+  mandos y la interfaz *netpacket* de red; `wasm/shim.c` es una pequeña biblioteca C.
+- Multijugador "Jugar juntos": los paquetes *netpacket* de gpSP viajan por un canal de datos
+  WebRTC. El anfitrión es el cliente 0 y reenvía los mensajes entre invitados.
+
+Para recompilar el núcleo: `wasm/build.sh` (necesita `clang`, `wasm-ld`, `git` y `python3`).
+
 ## Créditos y licencias
 
-- [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) 4.2.3 (GPL-3.0) — `site/vendor/emulatorjs`
-- [mGBA](https://mgba.io) (MPL-2.0), núcleo incluido en `site/vendor/emulatorjs/data/cores`
+- [gpSP](https://github.com/libretro/gpsp) (GPL-2.0), commit `5819380`, compilado en
+  `site/gpsp/gpsp.wasm`. Licencia en `site/gpsp/COPYING`; el código fuente se obtiene con `wasm/build.sh`.
 - [PeerJS](https://peerjs.com) 1.5.5 (MIT) — `site/vendor/peerjs`
+- [fflate](https://github.com/101arrowz/fflate) 0.8.2 (MIT) — `site/vendor/fflate`, para abrir ROMs `.zip`.
 
 No se incluye ningún juego. Usa solo copias de seguridad de juegos que tengas.

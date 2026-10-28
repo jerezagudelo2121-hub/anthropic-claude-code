@@ -23,8 +23,19 @@
     <div class="logo">GBA<span>web</span></div>
     <p class="tagline">Emulador de Game Boy Advance en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
 
+    <div id="invite-banner" class="banner" hidden></div>
+
     <label class="btn primary big" for="rom-input">🎮 Cargar ROM (.gba / .zip)</label>
     <input id="rom-input" type="file" hidden>
+
+    <div class="bios-row">
+      <div>
+        <b>BIOS de GBA</b> <span id="bios-status" class="badge">No cargada</span>
+        <p class="hint">Opcional (<code>gba_bios.bin</code>). Algunos juegos funcionan mejor con ella. Quetzal no la necesita.</p>
+      </div>
+      <label class="btn" for="bios-input">Elegir</label>
+      <input id="bios-input" type="file" hidden>
+    </div>
 
     <div id="recent" class="recent" hidden>
       <h3>Jugados recientemente</h3>
@@ -40,7 +51,7 @@
                maxlength="6" placeholder="CÓDIGO" aria-label="Código de la partida">
         <button class="btn" type="submit">Unirme</button>
       </div>
-      <p class="hint">Tu amigo no necesita tener la ROM: ve la partida en directo y juega con su propio mando.</p>
+      <p class="hint">Si tu amigo te invita a <b>jugar juntos</b>, te pediremos que cargues tu propia ROM. Si solo comparte su pantalla, no necesitas nada.</p>
     </form>
 
     <details class="help">
@@ -61,7 +72,7 @@
 
   <div class="screen-wrap">
     <div id="screen" class="screen">
-      <div id="game"></div>
+      <canvas id="game" width="240" height="160"></canvas>
       <video id="remote-video" playsinline autoplay muted hidden></video>
       <div id="screen-msg" class="screen-msg" hidden></div>
     </div>
@@ -90,6 +101,35 @@
   <div class="sheet-body">
     <h2>Menú</h2>
     <div class="host-only">
+      <h3>Multijugador online</h3>
+      <div id="mp-host">
+        <button class="btn primary mp-option" data-action="host-link">
+          <span>🔗 Jugar juntos <small>cada uno con su partida</small></span>
+        </button>
+        <p class="hint">Como el cable link / adaptador inalámbrico de la GBA: combates, intercambios y el multijugador de Pokémon Quetzal. Tu amigo necesita la misma ROM y abrir esta misma web.</p>
+        <button class="btn mp-option" data-action="host-screen">
+          <span>📺 Compartir mi pantalla <small>una sola partida</small></span>
+        </button>
+        <p class="hint">Tu amigo ve tu juego en directo y puede usar los botones. No necesita la ROM.</p>
+        <form id="menu-join" class="join-row">
+          <input id="menu-join-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="CÓDIGO" aria-label="Código de un amigo">
+          <button class="btn" type="submit">Unirme</button>
+        </form>
+      </div>
+      <div id="mp-session" hidden>
+        <p id="mp-mode"></p>
+        <div id="mp-code-box">
+          <p>Código de la partida:</p>
+          <div class="code" id="mp-code">------</div>
+          <div class="grid">
+            <button class="btn primary" data-action="share">📤 Enviar invitación</button>
+            <button class="btn" data-action="copy">📋 Copiar enlace</button>
+          </div>
+        </div>
+        <p id="mp-players"></p>
+        <label class="toggle" id="guest-control-row"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
+        <button class="btn danger" data-action="stop-net">Terminar multijugador</button>
+      </div>
       <h3>Guardado rápido</h3>
       <div class="slots" id="slots"></div>
       <h3>Opciones</h3>
@@ -102,20 +142,6 @@
         <button class="btn" data-action="fullscreen">⛶ Pantalla completa</button>
       </div>
       <input id="sav-input" type="file" hidden>
-      <h3>Multijugador online</h3>
-      <div id="mp-host">
-        <button class="btn primary" data-action="host">👥 Jugar con un amigo</button>
-      </div>
-      <div id="mp-session" hidden>
-        <p>Código de la partida:</p>
-        <div class="code" id="mp-code">------</div>
-        <div class="grid">
-          <button class="btn primary" data-action="share">📤 Enviar invitación</button>
-          <button class="btn" data-action="copy">📋 Copiar enlace</button>
-        </div>
-        <label class="toggle"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
-        <button class="btn danger" data-action="stop-host">Terminar multijugador</button>
-      </div>
     </div>
     <div class="guest-only">
       <p>Estás jugando en la partida de tu amigo. El juego, el sonido y las partidas guardadas los controla quien invitó.</p>
@@ -131,6 +157,8 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="vendor/peerjs/peerjs.min.js"></script>
+<script src="vendor/fflate/fflate.min.js"></script>
+<script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
