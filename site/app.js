@@ -11,7 +11,7 @@ const ICE_SERVERS = [
   // { urls: "turn:tu-servidor:3478", username: "usuario", credential: "clave" },
 ];
 const SLOTS = 3;
-const MAX_RECENT = 5;
+const COVER_EVERY_MS = 30000;
 const MAX_GUESTS = 4; // el adaptador inalámbrico admite hasta 5 consolas
 const BROADCAST = 0xffff;
 
@@ -111,25 +111,6 @@ function sameBytes(a, b) {
 
 /* ---------- Pantalla de inicio ---------- */
 
-async function renderRecent() {
-  let roms = [];
-  try { roms = await db.all("roms"); } catch (e) { /* modo privado, etc. */ }
-  roms.sort((a, b) => b.lastPlayed - a.lastPlayed);
-  const list = $("#recent-list");
-  list.innerHTML = "";
-  for (const rom of roms) {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.className = "btn";
-    btn.innerHTML = `<span></span><small>${timeAgo(rom.lastPlayed)}</small>`;
-    btn.firstChild.textContent = baseName(rom.name);
-    btn.onclick = () => startGame(new File([rom.data], rom.name));
-    li.appendChild(btn);
-    list.appendChild(li);
-  }
-  $("#recent").hidden = roms.length === 0;
-}
-
 async function renderBios() {
   const bios = await safeGet("files", "bios");
   const el = $("#bios-status");
@@ -137,20 +118,173 @@ async function renderBios() {
   el.classList.toggle("ok", !!bios);
 }
 
-async function rememberRom(file) {
+/* ---------- Biblioteca de juegos ---------- */
+
+let library = [];
+let sheetRom = null;
+
+function romTitle(rom) {
+  return rom.title || baseName(rom.name);
+}
+
+function formatSize(bytes) {
+  return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB" : Math.round(bytes / 1024) + " KB";
+}
+
+async function loadLibrary() {
+  try { library = await db.all("roms"); } catch (e) { library = []; }
+  library.sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) || romTitle(a).localeCompare(romTitle(b)));
+  renderLibrary();
+}
+
+function renderLibrary() {
+  const query = $("#lib-search").value.trim().toLowerCase();
+  const grid = $("#lib-grid");
+  grid.innerHTML = "";
+  $("#lib-empty").hidden = library.length > 0;
+  $("#lib-add").hidden = library.length === 0;
+  $("#lib-search").hidden = library.length < 5;
+  $("#lib-count").textContent = library.length;
+  $("#lib-count").hidden = library.length === 0;
+  for (const rom of library) {
+    const title = romTitle(rom);
+    if (query && !title.toLowerCase().includes(query)) continue;
+    const card = document.createElement("div");
+    card.className = "game-card";
+    card.setAttribute("role", "button");
+    card.tabIndex = 0;
+    let cover;
+    if (rom.cover) {
+      cover = document.createElement("img");
+      cover.src = rom.cover;
+      cover.alt = "";
+    } else {
+      cover = document.createElement("div");
+      cover.textContent = title.replace(/^pok[eé]mon\s*/i, "").slice(0, 2).toUpperCase() || "GBA";
+    }
+    cover.className = "cover";
+    const info = document.createElement("div");
+    info.className = "meta-info";
+    info.innerHTML = "<b></b><small></small>";
+    info.firstChild.textContent = title;
+    info.lastChild.textContent = rom.lastPlayed ? "Jugado " + timeAgo(rom.lastPlayed) : "Nuevo";
+    const more = document.createElement("button");
+    more.className = "more";
+    more.textContent = "⋯";
+    more.setAttribute("aria-label", "Opciones de " + title);
+    more.onclick = (e) => {
+      e.stopPropagation();
+      openGameSheet(rom);
+    };
+    card.append(cover, info, more);
+    card.onclick = () => playRom(rom);
+    grid.appendChild(card);
+  }
+  updateStorageInfo();
+}
+
+async function updateStorageInfo() {
+  const el = $("#lib-storage");
+  if (!library.length || !navigator.storage || !navigator.storage.estimate) return (el.textContent = "");
   try {
-    await db.put("roms", { name: file.name, data: file, lastPlayed: Date.now() });
-    const roms = (await db.all("roms")).sort((a, b) => b.lastPlayed - a.lastPlayed);
-    for (const old of roms.slice(MAX_RECENT)) await db.del("roms", old.name);
+    const { usage } = await navigator.storage.estimate();
+    el.textContent = `Ocupa ${formatSize(usage)} en este dispositivo. Tus juegos no se suben a internet.`;
   } catch (e) {
-    console.warn("No se pudo recordar la ROM", e);
+    el.textContent = "";
   }
 }
 
-$("#rom-input").addEventListener("change", (e) => {
-  const file = e.target.files[0];
+async function addToLibrary(files) {
+  let added = 0;
+  for (const file of files) {
+    try {
+      const old = library.find((r) => r.name === file.name);
+      await db.put("roms", { ...old, name: file.name, data: file, size: file.size, added: (old && old.added) || Date.now() });
+      added++;
+    } catch (e) {
+      console.warn("No se pudo guardar", file.name, e);
+      toast("No hay espacio para guardar " + file.name, 4000);
+    }
+  }
+  // Pide al navegador que no borre la biblioteca si falta espacio.
+  if (added && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  await loadLibrary();
+  return added;
+}
+
+async function updateRom(name, changes) {
+  const rom = await safeGet("roms", name);
+  if (!rom) return;
+  try { await db.put("roms", { ...rom, ...changes }); } catch (e) { console.warn(e); }
+}
+
+function playRom(rom) {
+  startGame(new File([rom.data], rom.name), rom);
+}
+
+function openGameSheet(rom) {
+  sheetRom = rom;
+  $("#gs-title").textContent = romTitle(rom);
+  const parts = [formatSize(rom.size || rom.data.size)];
+  parts.push(rom.lastPlayed ? "jugado " + timeAgo(rom.lastPlayed) : "sin jugar");
+  $("#gs-info").textContent = parts.join(" · ");
+  $("[data-gs=cover]").hidden = !rom.cover;
+  $("#game-sheet").hidden = false;
+}
+
+$("#game-sheet").addEventListener("click", async (e) => {
+  if (e.target.id === "game-sheet") return ($("#game-sheet").hidden = true);
+  const action = e.target.closest("[data-gs]");
+  if (!action || !sheetRom) return;
+  const rom = sheetRom;
+  switch (action.dataset.gs) {
+    case "play":
+      $("#game-sheet").hidden = true;
+      return playRom(rom);
+    case "rename": {
+      const title = prompt("Nuevo nombre:", romTitle(rom));
+      if (!title || !title.trim()) return;
+      await updateRom(rom.name, { title: title.trim() });
+      break;
+    }
+    case "export": {
+      const save = await safeGet("saves", baseName(rom.name));
+      if (!save) return toast("Este juego aún no tiene partida guardada");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([save]));
+      a.download = baseName(rom.name) + ".sav";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return;
+    }
+    case "cover":
+      await updateRom(rom.name, { cover: null });
+      break;
+    case "delete":
+      if (!confirm(`¿Eliminar «${romTitle(rom)}» de la biblioteca?\nTu partida guardada no se borra: si vuelves a añadir el juego, seguirá ahí.`)) return;
+      await db.del("roms", rom.name).catch(() => {});
+      toast("Juego eliminado");
+      break;
+    case "close":
+      break;
+  }
+  $("#game-sheet").hidden = true;
+  loadLibrary();
+});
+
+$("#lib-search").addEventListener("input", renderLibrary);
+
+$("#rom-input").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
   e.target.value = "";
-  if (file) startGame(file);
+  if (!files.length) return;
+  const added = await addToLibrary(files);
+  // Si te han invitado a jugar juntos (o solo eliges uno), el juego arranca directamente.
+  if (files.length === 1 && added) {
+    const rom = library.find((r) => r.name === files[0].name);
+    if (rom) return playRom(rom);
+  }
+  if (added) toast(added === 1 ? "Juego añadido a tu biblioteca" : `${added} juegos añadidos a tu biblioteca`);
 });
 
 $("#bios-input").addEventListener("change", async (e) => {
@@ -178,6 +312,8 @@ $("#join-form").addEventListener("submit", (e) => {
 let engine = null;
 let romName = "";
 let lastSave = null;
+let libraryName = "";
+let lastCover = 0;
 
 async function readRom(file) {
   let data = new Uint8Array(await file.arrayBuffer());
@@ -192,7 +328,7 @@ async function readRom(file) {
   return { data, name };
 }
 
-async function startGame(file) {
+async function startGame(file, record) {
   if (engine) return location.reload();
   showView("console");
   document.body.classList.remove("guest");
@@ -200,8 +336,9 @@ async function startGame(file) {
   try {
     const rom = await readRom(file);
     romName = baseName(rom.name);
-    $("#game-title").textContent = romName;
-    rememberRom(file);
+    libraryName = file.name;
+    $("#game-title").textContent = record ? romTitle(record) : romName;
+    updateRom(libraryName, { lastPlayed: Date.now() });
     const bios = await safeGet("files", "bios");
     engine = await GbaEngine.create(CORE_URL, $("#game"));
     if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
@@ -211,6 +348,7 @@ async function startGame(file) {
     engine.onFrame = pollGamepads;
     engine.resumeAudio();
     engine.start();
+    lastCover = Date.now() - COVER_EVERY_MS / 2; // primera portada a los ~15 s
     screenMsg("");
     renderSlots();
     setInterval(persistSave, 5000);
@@ -221,8 +359,24 @@ async function startGame(file) {
   }
 }
 
+// Portada de la biblioteca: una captura de la pantalla del juego.
+function saveCover(force) {
+  if (!engine || !engine.running || !libraryName) return;
+  if (!force && Date.now() - lastCover < COVER_EVERY_MS) return;
+  lastCover = Date.now();
+  try {
+    // No guardar pantallas negras (cargas, transiciones).
+    const px = $("#game").getContext("2d").getImageData(0, 0, 240, 160).data;
+    let sum = 0;
+    for (let i = 0; i < px.length; i += 64) sum += px[i] + px[i + 1] + px[i + 2];
+    if (sum / (px.length / 64) < 30) return;
+    updateRom(libraryName, { cover: $("#game").toDataURL("image/jpeg", 0.85) });
+  } catch (e) { /* lienzo no disponible */ }
+}
+
 async function persistSave() {
   if (!engine) return;
+  saveCover(false);
   const data = engine.getSave();
   if (!data || sameBytes(data, lastSave)) return;
   lastSave = data;
@@ -231,7 +385,10 @@ async function persistSave() {
 
 // iOS puede cerrar la pestaña sin avisar: guarda al salir de la app.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") persistSave();
+  if (document.visibilityState === "hidden") {
+    saveCover(true);
+    persistSave();
+  }
 });
 window.addEventListener("pagehide", persistSave);
 
@@ -442,6 +599,7 @@ $("#slots").addEventListener("click", async (e) => {
 const actions = {
   "close-menu": closeMenu,
   quit: async () => {
+    saveCover(true);
     await persistSave();
     net.stop(true);
     location.replace(location.pathname);
@@ -875,7 +1033,7 @@ function randomCode() {
 
 /* ---------- Inicio ---------- */
 
-renderRecent();
+loadLibrary();
 renderBios();
 const joinCode = (new URLSearchParams(location.search).get("join") || "").trim().toUpperCase();
 if (joinCode) net.join(joinCode);

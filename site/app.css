@@ -50,9 +50,38 @@ body { min-height: 100dvh; }
 .logo span { color: var(--accent); font-weight: 700; font-size: 32px; margin-left: 4px; }
 .tagline { text-align: center; color: var(--muted); margin: 0; }
 .home-card h3 { margin: 0 0 8px; font-size: 15px; color: var(--muted); font-weight: 600; }
-.recent ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.recent li button { width: 100%; justify-content: space-between; background: var(--panel); }
-.recent li small { color: var(--muted); font-weight: 400; }
+/* ---------- Biblioteca ---------- */
+.library { display: flex; flex-direction: column; gap: 12px; }
+.library-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.library-head h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+.btn.small { min-height: 38px; padding: 6px 14px; font-size: 15px; }
+.search {
+  min-height: 42px; padding: 0 14px; border-radius: var(--radius); border: 2px solid #44446a;
+  background: var(--bg-2); color: var(--text); font: inherit;
+}
+.search:focus { outline: none; border-color: var(--accent); }
+.lib-empty { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius); background: var(--panel); }
+.lib-empty p { margin: 0; color: var(--muted); }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.game-card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; padding: 0;
+  border: 0; border-radius: var(--radius); background: var(--panel); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.game-card:active { transform: scale(.98); }
+.game-card .cover {
+  aspect-ratio: 3 / 2; width: 100%; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #4b3f8f, #22223a); font-size: 34px; font-weight: 900; color: #ffffffcc;
+  image-rendering: pixelated; object-fit: cover;
+}
+.game-card .meta-info { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.game-card b { font-size: 14px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.game-card small { color: var(--muted); font-size: 12px; }
+.game-card .more {
+  position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%;
+  border: 0; background: #000a; color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
+}
+#game-sheet .sheet-body > .btn { width: 100%; }
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #44446a; }
 .join-row { display: flex; gap: 8px; }
