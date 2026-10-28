@@ -39,9 +39,15 @@ consolas se conectan como con el **cable link / adaptador inalámbrico** de la G
 usa el multijugador de **Pokémon Quetzal** (y los combates/intercambios de Pokémon).
 
 1. Los dos necesitáis **la misma ROM** (misma versión) y abrir esta web.
-2. Uno carga su juego y pulsa **Jugar juntos**. Sale un código; pulsa **Enviar invitación**.
-3. El otro abre el enlace (o escribe el código), **carga su ROM** y queda conectado.
-4. Dentro del juego, entrad al modo multijugador como haríais con RetroArch.
+2. **Solo la primera vez:** uno carga su juego y pulsa **Jugar juntos**. Sale un código de
+   sala; pulsa **Enviar invitación**. El otro abre el enlace y **carga su ROM**.
+3. Queda guardada una **sala de amigos**. A partir de entonces, cada vez que los dos abráis el
+   juego **os conectáis solos**, sin códigos: el primero que llega espera al otro.
+4. Ya conectados, **invitaos desde el propio juego** (menú multijugador de Quetzal), como en
+   una consola de verdad.
+
+En el menú puedes **Conectar ahora** u **Olvidar sala**. "Terminar multijugador" pausa la
+conexión automática hasta que vuelvas a abrir el juego.
 
 Funciona como el netplay de RetroArch con gpSP: el núcleo elige solo el modo correcto
 (cable link de Pokémon para hacks como Quetzal, adaptador inalámbrico para Esmeralda/Rojo Fuego).
