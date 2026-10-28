@@ -14,7 +14,8 @@ Incluye **multijugador online** para jugar con un amigo.
 - **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
 - **3 ranuras de guardado rápido** (save states), velocidad x2, silenciar, reiniciar.
 - Exportar / importar el archivo `.sav` (por ejemplo, para pasar tu partida del Android).
-- Recuerda los últimos 5 juegos para no tener que buscar la ROM cada vez.
+- **Biblioteca de juegos**: añade varias ROMs a la vez y quedan guardadas en el móvil, con la
+  portada de cada juego (una captura de su pantalla), buscador, renombrar y eliminar.
 - BIOS de GBA opcional (`gba_bios.bin`).
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.
@@ -23,7 +24,8 @@ Incluye **multijugador online** para jugar con un amigo.
 
 1. Abre la página en **Safari**.
 2. (Opcional) Pulsa **Compartir → Añadir a pantalla de inicio**.
-3. Pulsa **Cargar ROM** y elige tu archivo `.gba` (o `.zip`) desde la app Archivos.
+3. Pulsa **Añadir juegos** y elige tus archivos `.gba` (o `.zip`) desde la app Archivos.
+4. Toca un juego de tu biblioteca para jugar.
 
 ## Multijugador con un amigo
 

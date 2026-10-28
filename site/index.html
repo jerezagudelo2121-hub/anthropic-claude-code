@@ -25,8 +25,20 @@
 
     <div id="invite-banner" class="banner" hidden></div>
 
-    <label class="btn primary big" for="rom-input">🎮 Cargar ROM (.gba / .zip)</label>
-    <input id="rom-input" type="file" hidden>
+    <section class="library">
+      <div class="library-head">
+        <h2>📚 Mi biblioteca <span id="lib-count" class="badge"></span></h2>
+        <label class="btn small" for="rom-input" id="lib-add">＋ Añadir</label>
+      </div>
+      <input id="rom-input" type="file" multiple hidden>
+      <input id="lib-search" class="search" type="search" placeholder="Buscar juego…" aria-label="Buscar juego" hidden>
+      <div id="lib-empty" class="lib-empty">
+        <p>Aún no tienes juegos. Añade tus ROMs <b>.gba</b> o <b>.zip</b> (puedes elegir varias a la vez) y se quedarán guardadas aquí.</p>
+        <label class="btn primary big" for="rom-input">🎮 Añadir juegos</label>
+      </div>
+      <div id="lib-grid" class="lib-grid"></div>
+      <p id="lib-storage" class="hint"></p>
+    </section>
 
     <div class="bios-row">
       <div>
@@ -35,11 +47,6 @@
       </div>
       <label class="btn" for="bios-input">Elegir</label>
       <input id="bios-input" type="file" hidden>
-    </div>
-
-    <div id="recent" class="recent" hidden>
-      <h3>Jugados recientemente</h3>
-      <ul id="recent-list"></ul>
     </div>
 
     <div class="divider"><span>o</span></div>
@@ -151,6 +158,22 @@
       <button class="btn danger" data-action="quit">⏏ Salir</button>
       <button class="btn primary" data-action="close-menu">Volver al juego</button>
     </div>
+  </div>
+</div>
+
+<!-- Opciones de un juego de la biblioteca -->
+<div id="game-sheet" class="sheet" hidden>
+  <div class="sheet-body">
+    <h2 id="gs-title"></h2>
+    <p id="gs-info"></p>
+    <button class="btn primary" data-gs="play">▶ Jugar</button>
+    <div class="grid">
+      <button class="btn" data-gs="rename">✏️ Renombrar</button>
+      <button class="btn" data-gs="export">💾 Exportar partida</button>
+      <button class="btn" data-gs="cover">🖼️ Quitar portada</button>
+      <button class="btn danger" data-gs="delete">🗑️ Eliminar</button>
+    </div>
+    <button class="btn" data-gs="close">Cerrar</button>
   </div>
 </div>
 
