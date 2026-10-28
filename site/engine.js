@@ -90,15 +90,18 @@ class GbaEngine {
     this.debt = 0;
     const tick = (now) => {
       if (!this.running) return;
-      this.debt += Math.min(now - this.last, 100) * this.fps / 1000;
+      // El ritmo depende del tiempo real, no de los Hz de la pantalla (60 o 120 en iPhone).
+      const speed = this.fastForward ? 2 : 1;
+      this.debt += Math.min(now - this.last, 100) * this.fps * speed / 1000;
       this.last = now;
-      // Ajuste fino con el búfer de audio para que no se corte el sonido.
-      const level = this.audioLevel();
-      if (level > 0.75) this.debt -= 0.25;
-      else if (level < 0.2 && this.audioOn) this.debt += 0.25;
-      let frames = Math.min(Math.floor(this.debt), 4);
+      if (!this.fastForward) {
+        // Ajuste fino con el búfer de audio para que no se corte el sonido.
+        const level = this.audioLevel();
+        if (level > 0.75) this.debt -= 0.25;
+        else if (level < 0.2 && this.audioOn) this.debt += 0.25;
+      }
+      const frames = Math.min(Math.floor(this.debt), 4 * speed);
       this.debt -= frames;
-      if (this.fastForward) frames = Math.max(frames, 1) * 2;
       for (let i = 0; i < frames; i++) this.runFrame(i === frames - 1);
       requestAnimationFrame(tick);
     };
