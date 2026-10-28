@@ -34,20 +34,20 @@ Menú **☰ → Multijugador online**. Hay dos modos:
 
 ### 🔗 Jugar juntos (cada uno con su partida)
 
-Cada uno juega en **su propio móvil, con su propia partida y su propio equipo**, y las dos
-consolas se conectan como con el **cable link / adaptador inalámbrico** de la GBA. Es lo que
-usa el multijugador de **Pokémon Quetzal** (y los combates/intercambios de Pokémon).
+Cada uno juega en **su propio móvil, con su propia partida y su propio equipo**, y las consolas
+se conectan como con el **cable link / adaptador inalámbrico** de la GBA. Es lo que usa el
+multijugador de **Pokémon Quetzal** (y los combates/intercambios de Pokémon).
 
-1. Los dos necesitáis **la misma ROM** (misma versión) y abrir esta web.
-2. **Solo la primera vez:** uno carga su juego y pulsa **Jugar juntos**. Sale un código de
-   sala; pulsa **Enviar invitación**. El otro abre el enlace y **carga su ROM**.
-3. Queda guardada una **sala de amigos**. A partir de entonces, cada vez que los dos abráis el
-   juego **os conectáis solos**, sin códigos: el primero que llega espera al otro.
-4. Ya conectados, **invitaos desde el propio juego** (menú multijugador de Quetzal), como en
-   una consola de verdad.
+1. Los dos elegís un **apodo** en la pantalla de inicio.
+2. Uno **añade al otro** por su apodo (👥 Amigos → Añadir amigo). Al otro le aparece solo.
+   Cuando tu amigo tiene la web abierta sale con el **punto verde** y lo que está jugando.
+3. Abre tu juego y, en **☰ → 👥 Amigos**, pulsa **Invitar**.
+4. A tu amigo le sale *"Aabio te invita a jugar Quetzal"* → **Aceptar**. Se abre su Quetzal de
+   la biblioteca y entra en tu **sala** (anfitrión + hasta 3 amigos; los huecos salen como "Libre").
+5. Ya en la sala, **invitaos desde el propio juego** (menú multijugador de Quetzal).
 
-En el menú puedes **Conectar ahora** u **Olvidar sala**. "Terminar multijugador" pausa la
-conexión automática hasta que vuelvas a abrir el juego.
+También se puede entrar con el **código de sala** (Jugar juntos → Enviar invitación) si tu
+amigo aún no está en tu lista. Los dos necesitáis **la misma ROM** (misma versión).
 
 Funciona como el netplay de RetroArch con gpSP: el núcleo elige solo el modo correcto
 (cable link de Pokémon para hacks como Quetzal, adaptador inalámbrico para Esmeralda/Rojo Fuego).

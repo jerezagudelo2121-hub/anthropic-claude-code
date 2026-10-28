@@ -25,6 +25,29 @@
 
     <div id="invite-banner" class="banner" hidden></div>
 
+    <section class="profile">
+      <form id="nick-form" class="nick-form">
+        <h3>👤 Elige tu apodo</h3>
+        <p class="hint">Tus amigos te añadirán con él para invitarte a jugar.</p>
+        <div class="join-row">
+          <input id="nick-input" type="text" maxlength="20" autocomplete="off" placeholder="Tu apodo" aria-label="Tu apodo">
+          <button class="btn primary" type="submit">Guardar</button>
+        </div>
+      </form>
+      <div id="nick-view" class="nick-view" hidden>
+        <span>👤 Tu apodo: <b id="my-nick"></b></span>
+        <button id="nick-edit" class="btn small ghost" type="button">✏️</button>
+      </div>
+      <div id="friends-box" class="friends-box" hidden>
+        <h3>👥 Amigos</h3>
+        <div class="friends-list"></div>
+        <form class="friend-add join-row">
+          <input type="text" maxlength="20" autocomplete="off" placeholder="Apodo de tu amigo" aria-label="Apodo de tu amigo">
+          <button class="btn" type="submit">Añadir amigo</button>
+        </form>
+      </div>
+    </section>
+
     <section class="library">
       <div class="library-head">
         <h2>📚 Mi biblioteca <span id="lib-count" class="badge"></span></h2>
@@ -52,7 +75,7 @@
     <div class="divider"><span>o</span></div>
 
     <form id="join-form" class="join">
-      <h3>Unirme a la partida de un amigo</h3>
+      <h3>Unirme con un código</h3>
       <div class="join-row">
         <input id="join-code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters"
                maxlength="6" placeholder="CÓDIGO" aria-label="Código de la partida">
@@ -108,19 +131,19 @@
   <div class="sheet-body">
     <h2>Menú</h2>
     <div class="host-only">
+      <h3>👥 Amigos</h3>
+      <div id="lobby" class="lobby" hidden></div>
+      <div class="friends-list"></div>
+      <form class="friend-add join-row">
+        <input type="text" maxlength="20" autocomplete="off" placeholder="Apodo de tu amigo" aria-label="Apodo de tu amigo">
+        <button class="btn" type="submit">Añadir</button>
+      </form>
       <h3>Multijugador online</h3>
       <div id="mp-host">
-        <div id="room-box" class="room-box" hidden>
-          <p>🏠 Sala de amigos <b id="room-code"></b>: os conectáis solos al abrir el juego y os invitáis desde su menú multijugador.</p>
-          <div class="grid">
-            <button class="btn primary" data-action="room-connect">🔗 Conectar ahora</button>
-            <button class="btn" data-action="room-forget">Olvidar sala</button>
-          </div>
-        </div>
         <button class="btn primary mp-option" data-action="host-link">
           <span>🔗 Jugar juntos <small>cada uno con su partida</small></span>
         </button>
-        <p class="hint">Como el cable link de la GBA: el multijugador de Pokémon Quetzal, combates e intercambios. Invita a tu amigo <b>una sola vez</b>: se crea una sala y desde entonces os conectáis solos al abrir el juego. Necesita la misma ROM.</p>
+        <p class="hint">Como el cable link de la GBA (multijugador de Quetzal, combates, intercambios). Lo más fácil es pulsar <b>Invitar</b> en tu lista de amigos; esto crea una sala con código por si tu amigo aún no está en tu lista.</p>
         <button class="btn mp-option" data-action="host-screen">
           <span>📺 Compartir mi pantalla <small>una sola partida</small></span>
         </button>
@@ -171,6 +194,19 @@
     <div class="grid">
       <button class="btn danger" data-action="quit">⏏ Salir</button>
       <button class="btn primary" data-action="close-menu">Volver al juego</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invitación recibida -->
+<div id="invite-modal" class="sheet center" hidden>
+  <div class="sheet-body invite-card">
+    <h2 id="inv-title"></h2>
+    <p id="inv-game" class="inv-game"></p>
+    <p class="hint">Cada uno juega con su partida. Al aceptar se abre tu juego y entras en su sala.</p>
+    <div class="grid">
+      <button id="inv-decline" class="btn">Ahora no</button>
+      <button id="inv-accept" class="btn primary">Aceptar</button>
     </div>
   </div>
 </div>

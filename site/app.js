@@ -353,7 +353,7 @@ async function startGame(file, record) {
     renderSlots();
     setInterval(persistSave, 5000);
     if (net.pendingLink) net.sendReady();
-    else net.autoConnect();
+    friends.broadcastStatus();
   } catch (err) {
     console.error(err);
     screenMsg("No se pudo cargar: " + err.message);
@@ -655,17 +655,6 @@ const actions = {
   "host-link": () => net.host("link"),
   "host-screen": () => net.host("screen"),
   "stop-net": () => net.stop(),
-  "room-connect": () => {
-    net.autoPaused = false;
-    net.autoConnect();
-  },
-  "room-forget": () => {
-    if (!confirm("¿Olvidar la sala? Tendréis que volver a invitaros con un código.")) return;
-    if (net.auto) net.stop(true);
-    forgetRoom();
-    net.renderSession();
-    toast("Sala olvidada");
-  },
   share: () => {
     const url = net.inviteUrl();
     const text = net.mode === "link"
@@ -735,9 +724,10 @@ const net = {
   code: "",
   guestControl: true,
   pendingLink: false,
-  auto: false,          // sesión abierta sola al entrar en el juego (sala guardada)
-  autoPaused: false,    // el jugador pulsó "Terminar multijugador"
-  room: loadRoom(),     // código de la sala de amigos guardada
+  names: new Map(),     // anfitrión: id de cliente -> apodo
+  roster: [],           // jugadores de la sala: [{ id, nick }]
+  hostReady: false,
+  onHostReady: [],
 
   inviteUrl() {
     return `${location.origin}${location.pathname}?join=${this.code}`;
@@ -756,8 +746,6 @@ const net = {
 
   renderSession() {
     updateFastForward();
-    $("#room-box").hidden = !this.room || !!this.role;
-    $("#room-code").textContent = this.room || "";
     const active = !!this.role;
     $("#mp-host").hidden = active;
     $("#mp-session").hidden = !active;
@@ -766,24 +754,34 @@ const net = {
     $("#mp-code-box").hidden = !isHost;
     $("#guest-control-row").hidden = !(isHost && this.mode === "screen");
     $("#mp-mode").textContent = this.mode === "link"
-      ? `🔗 Sala ${this.code}: cada uno con su partida. Al abrir el juego os conectáis solos; invitaos desde el menú multijugador del juego.`
+      ? (isHost ? "Eres el anfitrión. Invita a tus amigos (hasta 4) y, cuando estéis, invitaos desde el menú multijugador del juego." : "Estás en la sala de tu amigo. Ya podéis invitaros desde el menú multijugador del juego.")
       : "📺 Compartiendo pantalla.";
-    let players = "";
-    if (isHost) players = this.conns.size ? `Conectados: ${this.conns.size + 1} jugadores` : "Esperando a tu amigo…";
-    else if (this.role === "guest") players = `Conectado a la partida de tu amigo (código ${this.code}).`;
-    $("#mp-players").textContent = players;
+    renderLobby();
+  },
+
+  // Lista de jugadores de la sala (anfitrión primero).
+  updateRoster() {
+    if (this.role !== "host") return;
+    this.roster = [{ id: 0, nick: friends.nick || "Tú" }];
+    for (const id of [...this.conns.keys()].sort()) this.roster.push({ id, nick: this.names.get(id) || "Jugador " + (id + 1) });
+    for (const conn of this.conns.values()) this.sendJSON(conn, { t: "roster", players: this.roster });
+    this.renderSession();
+  },
+
+  whenHostReady(cb) {
+    if (this.role === "host" && this.hostReady) cb();
+    else this.onHostReady.push(cb);
   },
 
   /* ----- Anfitrión ----- */
 
-  host(mode, fixedCode) {
+  host(mode) {
     if (this.role) return;
     if (!engine) return toast("Espera a que cargue el juego");
     this.role = "host";
     this.mode = mode;
-    this.code = fixedCode || randomCode();
-    if (!fixedCode) this.auto = false;
-    if (mode === "link") saveRoom(this.code);
+    this.code = randomCode();
+    this.hostReady = false;
     $("#mp-code").textContent = "······";
     this.renderSession();
     setNetStatus("Conectando…", "wait");
@@ -795,18 +793,23 @@ const net = {
       if (started) return;
       started = true;
       $("#mp-code").textContent = this.code;
-      setNetStatus(this.auto ? "🔗 Sala · esperando a tu amigo" : "Esperando amigo · " + this.code, "wait");
+      setNetStatus("🔗 Sala · esperando amigos", "wait");
       if (mode === "link") {
         engine.onNetSend = (data, client) => this.hostSend(data, client, 0);
         engine.netStart(0);
       }
+      this.hostReady = true;
+      this.updateRoster();
+      friends.broadcastStatus();
+      const cbs = this.onHostReady.splice(0);
+      for (const cb of cbs) cb();
     });
     peer.on("error", (err) => {
       console.error(err);
       if (err.type === "unavailable-id") {
+        const pending = this.onHostReady.splice(0);
         this.stop(true);
-        // En una sala, si el código ya está ocupado es que tu amigo ya es el anfitrión: te unes a él.
-        if (fixedCode) return this.join(fixedCode, { auto: this.auto });
+        this.onHostReady = pending;
         return this.host(mode);
       }
       if (this.peer !== peer) return;
@@ -821,9 +824,12 @@ const net = {
 
   acceptGuest(conn) {
     let id = 0;
+    let guestNick = "Tu amigo";
     const gone = () => {
       if (!id || this.conns.get(id) !== conn) return;
       this.conns.delete(id);
+      const who = this.names.get(id) || "Tu amigo";
+      this.names.delete(id);
       if (this.mode === "link") engine.netDisconnected(id);
       else {
         if (this.call) this.call.close();
@@ -832,9 +838,9 @@ const net = {
         applyButtons();
       }
       if (this.role === "host") {
-        setNetStatus(this.conns.size ? `👥 ${this.conns.size + 1} jugadores` : "Esperando amigo · " + this.code, this.conns.size ? "ok" : "wait");
-        toast("Tu amigo se ha desconectado");
-        this.renderSession();
+        setNetStatus(this.conns.size ? `👥 ${this.conns.size + 1} jugadores` : "🔗 Sala · esperando amigos", this.conns.size ? "ok" : "wait");
+        toast(who + " ha salido de la sala");
+        this.updateRoster();
       }
     };
     const admit = () => {
@@ -847,22 +853,28 @@ const net = {
         return;
       }
       this.conns.set(id, conn);
+      this.names.set(id, guestNick);
       this.sendJSON(conn, { t: "welcome", id });
       if (this.mode === "screen") this.call = this.peer.call(conn.peer, buildStream());
       setNetStatus(`👥 ${this.conns.size + 1} jugadores`, "ok");
-      toast(this.mode === "link" ? "¡Tu amigo está conectado! Invitaos desde el menú multijugador del juego." : "¡Tu amigo se ha unido!", 5000);
-      this.renderSession();
+      toast(this.mode === "link" ? `¡${guestNick} ha entrado en la sala! Invitaos desde el menú multijugador del juego.` : `¡${guestNick} se ha unido!`, 5000);
+      this.updateRoster();
     };
     conn.on("open", () => {
       heartbeat(conn, gone);
-      this.sendJSON(conn, { t: "hello", mode: this.mode, game: romName, ctl: this.guestControl });
+      this.sendJSON(conn, { t: "hello", mode: this.mode, game: romName, ctl: this.guestControl, nick: friends.nick });
       if (this.mode === "screen") admit();
     });
     conn.on("data", (msg) => {
       if (typeof msg === "string") {
         const m = parseJSON(msg);
         if (!m) return;
+        if (m.nick) guestNick = String(m.nick).slice(0, 20);
         if (m.t === "ready" && this.mode === "link" && !id) admit();
+        else if (m.t === "viewer" && this.mode === "screen" && id) {
+          this.names.set(id, guestNick);
+          this.updateRoster();
+        }
         else if (m.t === "k" && this.mode === "screen") {
           remoteMask = m.m | 0;
           applyButtons();
@@ -892,11 +904,9 @@ const net = {
 
   /* ----- Invitado ----- */
 
-  join(code, opts = {}) {
+  join(code) {
     if (this.role || this.peer) this.stop(true);
     this.code = code;
-    this.auto = !!opts.auto;
-    if (!opts.auto) this.autoPaused = false;
     history.replaceState(null, "", location.pathname);
     let peer;
     try {
@@ -904,13 +914,12 @@ const net = {
     } catch (e) {
       return toast("No se pudo iniciar el multijugador: " + e.message, 4000);
     }
-    if (!this.auto) toast("Conectando con " + code + "…", 4000);
+    toast("Conectando…", 4000);
     peer.on("open", () => {
       const conn = this.conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "raw" });
       conn.on("data", (msg) => this.onHostData(msg));
       setTimeout(() => {
         if (this.conn === conn && !conn.open) {
-          if (this.auto) return this.retryAuto();
           showNetError("No se pudo conectar directamente con tu amigo. Suele pasar con algunos datos móviles: probad los dos con Wi‑Fi, y que tu amigo tenga la web abierta en pantalla.");
           conn.close();
         }
@@ -918,16 +927,15 @@ const net = {
       const gone = () => {
         if (this.conn !== conn) return;
         if (this.mode === "link" && this.role === "guest") engine.netStop();
-        const wasGuest = this.role === "guest";
-        lastNetError = "Se perdió la conexión con tu amigo. Si tenéis una sala guardada, os volveréis a conectar solos.";
+        lastNetError = "Se perdió la conexión con tu amigo. Podéis volver a invitaros desde la lista de amigos.";
         setNetStatus("Desconectado", "bad");
         if (this.role === "viewer") screenMsg("La partida ha terminado o se perdió la conexión.");
         else toast("Se perdió la conexión con tu amigo", 4000);
         this.role = null;
         this.conn = null;
+        this.roster = [];
         this.renderSession();
-        // En una sala, si el anfitrión se va, se vuelve a buscar (o a ser el anfitrión) solo.
-        if (wasGuest && this.room && engine) this.retryAuto();
+        friends.broadcastStatus();
       };
       conn.on("open", () => heartbeat(conn, gone));
       conn.on("close", gone);
@@ -949,8 +957,6 @@ const net = {
       if (this.peer !== peer) return;
       // Si se cae solo el servidor de encuentro pero ya estás conectado con tu amigo, se sigue jugando.
       if (SIGNALING_ERRORS.includes(err.type) && this.conn && this.conn.open) return reconnectLater(peer);
-      // En la sala automática, si tu amigo aún no ha llegado, se reintenta en silencio.
-      if (this.auto && err.type === "peer-unavailable") return this.retryAuto();
       const msg = explainPeerError(err, code);
       showNetError(msg);
       if (this.role === "viewer") screenMsg(msg);
@@ -970,6 +976,7 @@ const net = {
     if (m.t === "hello") {
       this.mode = m.mode;
       this.hostGame = m.game;
+      this.hostNick = m.nick || "tu amigo";
       if (m.mode === "screen") this.becomeViewer(m);
       else if (engine) this.sendReady();
       else this.waitForRom(m.game);
@@ -984,12 +991,15 @@ const net = {
           if (this.conn && this.conn.open) this.conn.send(framed.buffer);
         };
         engine.netStart(m.id);
-        saveRoom(this.code);
+        friends.broadcastStatus();
         setNetStatus(`🔗 Conectado · J${m.id + 1}`, "ok");
         toast(this.hostGame && this.hostGame !== romName
           ? `Conectado. Ojo: tu ROM («${romName}») y la de tu amigo («${this.hostGame}») tienen nombres distintos; tienen que ser la misma versión.`
-          : "¡Conectados! Ya podéis invitaros desde el menú multijugador del juego.", 6000);
+          : `¡Estás en la sala de ${this.hostNick}! Ya podéis invitaros desde el menú multijugador del juego.`, 6000);
       }
+      this.renderSession();
+    } else if (m.t === "roster") {
+      this.roster = Array.isArray(m.players) ? m.players : [];
       this.renderSession();
     } else if (m.t === "ctl") {
       toast(m.on ? "Ya puedes usar los controles" : "Tu amigo ha desactivado tus controles");
@@ -1004,13 +1014,19 @@ const net = {
     showView("home");
     const banner = $("#invite-banner");
     banner.hidden = false;
-    banner.textContent = `🔗 Tu amigo te espera en «${game}». Carga tu ROM (la misma versión) para jugar juntos.`;
+    banner.textContent = `🔗 ${this.hostNick || "Tu amigo"} te espera en «${game}». Elige ese juego en tu biblioteca (la misma versión) para jugar juntos.`;
     setNetStatus("Esperando tu ROM", "wait");
+    // Si ya tienes ese juego en la biblioteca, se abre solo.
+    const match = library.find((r) => baseName(r.name) === game || romTitle(r) === game);
+    if (match) {
+      toast(`Abriendo tu «${romTitle(match)}»…`);
+      playRom(match);
+    }
   },
 
   sendReady() {
     this.pendingLink = false;
-    this.sendJSON(this.conn, { t: "ready", game: romName });
+    this.sendJSON(this.conn, { t: "ready", game: romName, nick: friends.nick });
     setNetStatus("Conectando…", "wait");
   },
 
@@ -1021,27 +1037,13 @@ const net = {
       engine.setMuted(true);
     }
     this.role = "viewer";
+    this.sendJSON(this.conn, { t: "viewer", nick: friends.nick });
     document.body.classList.add("guest");
     showView("console");
     $("#game-title").textContent = "Partida de tu amigo · " + m.game;
     setNetStatus("👥 Conectado", "ok");
     screenMsg("Esperando la imagen…");
     if (!m.ctl) toast("Tu amigo ha desactivado tus controles");
-  },
-
-  // Sala de amigos: al abrir un juego, el primero que llega es el anfitrión y el otro se une solo.
-  autoConnect() {
-    if (!engine || !this.room || this.role || this.peer || this.autoPaused || this.pendingLink) return;
-    this.auto = true;
-    this.host("link", this.room);
-  },
-
-  retryAuto() {
-    this.stop(true);
-    this.auto = true;
-    setNetStatus("🔗 Sala · buscando a tu amigo", "wait");
-    clearTimeout(this.retryTimer);
-    this.retryTimer = setTimeout(() => this.autoConnect(), 4000 + Math.random() * 2000);
   },
 
   stop(silent) {
@@ -1052,32 +1054,21 @@ const net = {
     if (this.peer) this.peer.destroy();
     this.peer = this.conn = this.call = null;
     this.conns.clear();
+    this.names.clear();
+    this.roster = [];
+    this.hostReady = false;
+    this.onHostReady = [];
     this.role = this.mode = null;
     remoteMask = 0;
     applyButtons();
     this.renderSession();
+    friends.broadcastStatus();
     if (!silent) {
-      this.autoPaused = true;
-      clearTimeout(this.retryTimer);
       setNetStatus("");
       toast("Multijugador terminado");
     }
   },
 };
-
-function loadRoom() {
-  try { return localStorage.getItem("gbaweb-sala") || ""; } catch (e) { return ""; }
-}
-
-function saveRoom(code) {
-  net.room = code;
-  try { localStorage.setItem("gbaweb-sala", code); } catch (e) { /* sin almacenamiento */ }
-}
-
-function forgetRoom() {
-  net.room = "";
-  try { localStorage.removeItem("gbaweb-sala"); } catch (e) { /* sin almacenamiento */ }
-}
 
 const SIGNALING_ERRORS = ["network", "server-error", "socket-error", "socket-closed", "disconnected"];
 let lastNetError = "";
@@ -1085,7 +1076,7 @@ let lastNetError = "";
 function explainPeerError(err, code) {
   switch (err.type) {
     case "peer-unavailable":
-      return `No se encuentra la partida ${code || ""}. Revisa el código y pide a tu amigo que tenga la web abierta en pantalla (si bloquea el móvil, la partida se cierra).`;
+      return `No se encuentra la sala de tu amigo${code ? " (" + code + ")" : ""}. Pide a tu amigo que tenga la web abierta en pantalla (si bloquea el móvil, la sala se cierra) y que te vuelva a invitar.`;
     case "network":
     case "server-error":
     case "socket-error":
@@ -1151,9 +1142,336 @@ function randomCode() {
   return [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
 }
 
+/* ---------- Amigos: apodo, quién está conectado e invitaciones ----------
+ * Cada jugador registra en PeerJS un id con su apodo (gbaweb-v2-u-<apodo>) mientras tiene la web
+ * abierta. Con cada amigo se mantiene una conexión de datos ligera: si abre, está conectado.
+ * Por ella viajan el estado ("jugando a…") y las invitaciones a la sala.
+ */
+
+const FRIEND_PROBE_MS = 15000;
+
+function lsGet(key) {
+  try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
+}
+
+function nickId(nick) {
+  return String(nick || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
+const friends = {
+  nick: lsGet("gbaweb-apodo"),
+  list: [].concat(parseJSON(lsGet("gbaweb-amigos") || "[]") || []), // [{ id, nick }]
+  peer: null,
+  conns: new Map(),     // id de amigo -> conexión abierta
+  pending: new Set(),   // ids a los que se está intentando conectar
+  status: new Map(),    // id de amigo -> { game, room }
+  invite: null,         // invitación recibida pendiente
+
+  save() {
+    try {
+      localStorage.setItem("gbaweb-apodo", this.nick);
+      localStorage.setItem("gbaweb-amigos", JSON.stringify(this.list));
+    } catch (e) { /* sin almacenamiento */ }
+  },
+
+  peerIdFor(id) {
+    return PEER_PREFIX + "u-" + id;
+  },
+
+  start() {
+    if (!this.nick || this.peer || !window.Peer) return;
+    let peer;
+    try { peer = this.peer = net.newPeer(this.peerIdFor(nickId(this.nick))); } catch (e) { return; }
+    peer.on("open", () => {
+      this.online = true;
+      this.justSet = false;
+      render();
+      this.probe();
+    });
+    peer.on("connection", (conn) => this.attach(conn));
+    peer.on("error", (err) => {
+      if (err.type === "unavailable-id") {
+        this.peer = null;
+        peer.destroy();
+        this.online = false;
+        render();
+        toast(`El apodo «${this.nick}» ya lo está usando otra persona (o tienes la web abierta en otra pestaña). Elige otro.`, 6000);
+        if (this.justSet) {
+          // Apodo recién elegido y ocupado: se vuelve a pedir.
+          this.nick = "";
+          this.save();
+          render();
+        }
+        return;
+      }
+      if (err.type === "peer-unavailable") {
+        // El amigo al que se intentaba llamar no está conectado.
+        const m = /u-([a-z0-9]+)/.exec(err.message || "");
+        if (m) this.pending.delete(m[1]);
+        return;
+      }
+      if (SIGNALING_ERRORS.includes(err.type)) setTimeout(() => {
+        if (this.peer === peer && !peer.destroyed && peer.disconnected) try { peer.reconnect(); } catch (e) { /* reintento luego */ }
+      }, 3000);
+    });
+    peer.on("disconnected", () => setTimeout(() => {
+      if (this.peer === peer && !peer.destroyed && peer.disconnected) try { peer.reconnect(); } catch (e) { /* reintento luego */ }
+    }, 3000));
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.probe(), FRIEND_PROBE_MS);
+  },
+
+  restart() {
+    for (const conn of this.conns.values()) conn.close();
+    this.conns.clear();
+    this.pending.clear();
+    if (this.peer) this.peer.destroy();
+    this.peer = null;
+    this.online = false;
+    this.start();
+  },
+
+  // Intenta conectar con los amigos que no están conectados.
+  probe() {
+    if (!this.peer || this.peer.disconnected || document.visibilityState === "hidden") return;
+    for (const f of this.list) {
+      if (this.conns.has(f.id) || this.pending.has(f.id)) continue;
+      this.pending.add(f.id);
+      const conn = this.peer.connect(this.peerIdFor(f.id), { serialization: "json", metadata: { kind: "friend" } });
+      this.attach(conn);
+      setTimeout(() => {
+        if (!conn.open) {
+          this.pending.delete(f.id);
+          conn.close();
+        }
+      }, 10000);
+    }
+  },
+
+  attach(conn) {
+    let id = conn.peer.replace(PEER_PREFIX + "u-", "");
+    conn.on("open", () => {
+      this.pending.delete(id);
+      this.conns.set(id, conn);
+      conn.send(this.hello());
+      render();
+    });
+    conn.on("data", (m) => this.onMessage(id, conn, m));
+    const gone = () => {
+      if (this.conns.get(id) === conn) {
+        this.conns.delete(id);
+        this.status.delete(id);
+        render();
+      }
+      this.pending.delete(id);
+    };
+    conn.on("close", gone);
+    conn.on("error", gone);
+  },
+
+  hello() {
+    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && net.mode === "link" };
+  },
+
+  broadcastStatus() {
+    for (const conn of this.conns.values()) if (conn.open) conn.send(this.hello());
+    render();
+  },
+
+  onMessage(id, conn, m) {
+    if (!m || typeof m !== "object") return;
+    if (m.t === "hi") {
+      this.status.set(id, { game: m.game || "", room: !!m.room });
+      // Si alguien te ha añadido, también aparece en tu lista.
+      if (!this.list.some((f) => f.id === id) && m.nick) {
+        this.list.push({ id, nick: String(m.nick).slice(0, 20) });
+        this.save();
+        toast(`${m.nick} te ha añadido como amigo`, 4000);
+      }
+      render();
+    } else if (m.t === "invite") {
+      this.showInvite(id, m);
+    } else if (m.t === "invite-no") {
+      toast(`${this.nickOf(id)} no puede jugar ahora`, 4000);
+    } else if (m.t === "invite-ok") {
+      toast(`${this.nickOf(id)} ha aceptado. Entrando en la sala…`, 4000);
+    }
+  },
+
+  nickOf(id) {
+    const f = this.list.find((x) => x.id === id);
+    return f ? f.nick : id;
+  },
+
+  add(nick) {
+    const id = nickId(nick);
+    if (id.length < 3) return toast("Escribe el apodo de tu amigo (mínimo 3 letras o números)");
+    if (id === nickId(this.nick)) return toast("Ese es tu propio apodo 😄");
+    if (this.list.some((f) => f.id === id)) return toast("Ya lo tienes en tu lista");
+    this.list.push({ id, nick: nick.trim().slice(0, 20) });
+    this.save();
+    render();
+    this.probe();
+    toast(`${nick.trim()} añadido. Aparecerá en verde cuando tenga la web abierta.`, 4000);
+  },
+
+  remove(id) {
+    if (!confirm(`¿Quitar a ${this.nickOf(id)} de tus amigos?`)) return;
+    this.list = this.list.filter((f) => f.id !== id);
+    this.save();
+    const conn = this.conns.get(id);
+    if (conn) conn.close();
+    render();
+  },
+
+  // Invitar: abre (o reutiliza) tu sala de "Jugar juntos" y manda el código a tu amigo.
+  sendInvite(id) {
+    const conn = this.conns.get(id);
+    if (!conn || !conn.open) return toast(`${this.nickOf(id)} no está conectado ahora`);
+    if (!engine) return toast("Abre primero tu juego para poder invitar");
+    if (net.role && !(net.role === "host" && net.mode === "link")) {
+      return toast("Ya estás en una sala. Termina el multijugador para crear la tuya.", 4000);
+    }
+    if (!net.role) net.host("link");
+    toast(`Invitación enviada a ${this.nickOf(id)}…`);
+    net.whenHostReady(() => conn.open && conn.send({ t: "invite", code: net.code, game: romName, nick: this.nick }));
+  },
+
+  showInvite(id, m) {
+    this.invite = { id, code: String(m.code || ""), game: String(m.game || "") };
+    $("#inv-title").textContent = `🎮 ${m.nick || this.nickOf(id)} te invita a jugar`;
+    $("#inv-game").textContent = m.game ? `«${m.game}»` : "";
+    $("#invite-modal").hidden = false;
+  },
+
+  answerInvite(ok) {
+    const inv = this.invite;
+    this.invite = null;
+    $("#invite-modal").hidden = true;
+    if (!inv) return;
+    const conn = this.conns.get(inv.id);
+    if (conn && conn.open) conn.send({ t: ok ? "invite-ok" : "invite-no" });
+    if (!ok || !/^[A-Z0-9]{6}$/.test(inv.code)) return;
+    closeMenu();
+    if (engine && romName !== inv.game) {
+      // Estás en otro juego: se guarda y se abre el de la invitación.
+      persistSave();
+      sessionStorage.setItem("gbaweb-join", inv.code);
+      return location.reload();
+    }
+    net.join(inv.code);
+  },
+};
+
+function render() {
+  renderFriends();
+  renderLobby();
+}
+
+function renderProfile() {
+  const has = !!friends.nick;
+  $("#nick-form").hidden = has;
+  $("#nick-view").hidden = !has;
+  $("#my-nick").textContent = friends.nick;
+  $("#friends-box").hidden = !has;
+}
+
+function renderFriends() {
+  renderProfile();
+  for (const list of document.querySelectorAll(".friends-list")) {
+    list.innerHTML = "";
+    if (!friends.list.length) {
+      list.innerHTML = '<p class="hint">Añade a tu amigo con su apodo. Él tiene que añadirte a ti con el tuyo (o aceptarte cuando te vea).</p>';
+      continue;
+    }
+    const sorted = [...friends.list].sort((a, b) => friends.conns.has(b.id) - friends.conns.has(a.id));
+    for (const f of sorted) {
+      const online = friends.conns.has(f.id);
+      const st = friends.status.get(f.id) || {};
+      const row = document.createElement("div");
+      row.className = "friend-row";
+      row.innerHTML = `<span class="dot ${online ? "on" : ""}"></span>
+        <div class="friend-info"><b></b><small></small></div>
+        <button class="btn small primary" data-invite ${online ? "" : "disabled"}>Invitar</button>
+        <button class="btn small ghost" data-remove aria-label="Quitar">✕</button>`;
+      row.querySelector("b").textContent = f.nick;
+      row.querySelector("small").textContent = !online ? "Desconectado" : st.game ? `Jugando ${st.game}${st.room ? " · en su sala" : ""}` : "En el menú";
+      row.querySelector("[data-invite]").onclick = () => friends.sendInvite(f.id);
+      row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
+      list.appendChild(row);
+    }
+  }
+}
+
+function renderLobby() {
+  const box = $("#lobby");
+  const show = net.mode === "link" && (net.role === "host" || net.role === "guest");
+  box.hidden = !show;
+  if (!show) return;
+  box.innerHTML = "";
+  const players = net.roster.length ? net.roster : [{ id: 0, nick: net.hostNick || "Anfitrión" }];
+  for (let i = 0; i < 4; i++) {
+    const p = players[i];
+    const slot = document.createElement("div");
+    slot.className = "slot-card" + (p ? " taken" : "") + (p && p.id === 0 ? " host" : "");
+    if (p) {
+      slot.innerHTML = "<span class=\"avatar\"></span><b></b><small></small>";
+      slot.querySelector(".avatar").textContent = (p.nick || "?").slice(0, 1).toUpperCase();
+      slot.querySelector("b").textContent = p.nick;
+      slot.querySelector("small").textContent = p.id === 0 ? "Anfitrión" : "J" + (p.id + 1);
+    } else {
+      slot.innerHTML = "<span class=\"free\">Libre</span>";
+    }
+    box.appendChild(slot);
+  }
+}
+
+$("#nick-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const nick = $("#nick-input").value.trim().slice(0, 20);
+  if (nickId(nick).length < 3) return toast("Tu apodo necesita al menos 3 letras o números");
+  friends.nick = nick;
+  friends.justSet = true;
+  friends.save();
+  render();
+  friends.restart();
+  toast(`¡Hola, ${nick}! Dale tu apodo a tus amigos para que te añadan.`, 4000);
+});
+
+$("#nick-edit").addEventListener("click", () => {
+  if (net.role) return toast("Termina el multijugador para cambiar tu apodo");
+  const nick = prompt("Tu nuevo apodo:", friends.nick);
+  if (!nick || nickId(nick).length < 3) return;
+  friends.nick = nick.trim().slice(0, 20);
+  friends.justSet = true;
+  friends.save();
+  render();
+  friends.restart();
+});
+
+for (const form of document.querySelectorAll(".friend-add")) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = form.querySelector("input");
+    friends.add(input.value);
+    input.value = "";
+  });
+}
+
+$("#inv-accept").addEventListener("click", () => friends.answerInvite(true));
+$("#inv-decline").addEventListener("click", () => friends.answerInvite(false));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") friends.probe();
+});
+
 /* ---------- Inicio ---------- */
 
 loadLibrary();
 renderBios();
-const joinCode = (new URLSearchParams(location.search).get("join") || "").trim().toUpperCase();
+render();
+friends.start();
+// Invitación aceptada desde otro juego: se recargó la página para abrir el correcto.
+const pendingJoin = sessionStorage.getItem("gbaweb-join");
+sessionStorage.removeItem("gbaweb-join");
+const joinCode = (new URLSearchParams(location.search).get("join") || pendingJoin || "").trim().toUpperCase();
 if (joinCode) net.join(joinCode);
