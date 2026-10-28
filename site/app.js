@@ -353,6 +353,7 @@ async function startGame(file, record) {
     renderSlots();
     setInterval(persistSave, 5000);
     if (net.pendingLink) net.sendReady();
+    else net.autoConnect();
   } catch (err) {
     console.error(err);
     screenMsg("No se pudo cargar: " + err.message);
@@ -654,6 +655,17 @@ const actions = {
   "host-link": () => net.host("link"),
   "host-screen": () => net.host("screen"),
   "stop-net": () => net.stop(),
+  "room-connect": () => {
+    net.autoPaused = false;
+    net.autoConnect();
+  },
+  "room-forget": () => {
+    if (!confirm("¿Olvidar la sala? Tendréis que volver a invitaros con un código.")) return;
+    if (net.auto) net.stop(true);
+    forgetRoom();
+    net.renderSession();
+    toast("Sala olvidada");
+  },
   share: () => {
     const url = net.inviteUrl();
     const text = net.mode === "link"
@@ -723,6 +735,9 @@ const net = {
   code: "",
   guestControl: true,
   pendingLink: false,
+  auto: false,          // sesión abierta sola al entrar en el juego (sala guardada)
+  autoPaused: false,    // el jugador pulsó "Terminar multijugador"
+  room: loadRoom(),     // código de la sala de amigos guardada
 
   inviteUrl() {
     return `${location.origin}${location.pathname}?join=${this.code}`;
@@ -741,6 +756,8 @@ const net = {
 
   renderSession() {
     updateFastForward();
+    $("#room-box").hidden = !this.room || !!this.role;
+    $("#room-code").textContent = this.room || "";
     const active = !!this.role;
     $("#mp-host").hidden = active;
     $("#mp-session").hidden = !active;
@@ -749,7 +766,7 @@ const net = {
     $("#mp-code-box").hidden = !isHost;
     $("#guest-control-row").hidden = !(isHost && this.mode === "screen");
     $("#mp-mode").textContent = this.mode === "link"
-      ? "🔗 Jugar juntos: cada uno con su partida."
+      ? `🔗 Sala ${this.code}: cada uno con su partida. Al abrir el juego os conectáis solos; invitaos desde el menú multijugador del juego.`
       : "📺 Compartiendo pantalla.";
     let players = "";
     if (isHost) players = this.conns.size ? `Conectados: ${this.conns.size + 1} jugadores` : "Esperando a tu amigo…";
@@ -759,12 +776,14 @@ const net = {
 
   /* ----- Anfitrión ----- */
 
-  host(mode) {
+  host(mode, fixedCode) {
     if (this.role) return;
     if (!engine) return toast("Espera a que cargue el juego");
     this.role = "host";
     this.mode = mode;
-    this.code = randomCode();
+    this.code = fixedCode || randomCode();
+    if (!fixedCode) this.auto = false;
+    if (mode === "link") saveRoom(this.code);
     $("#mp-code").textContent = "······";
     this.renderSession();
     setNetStatus("Conectando…", "wait");
@@ -776,7 +795,7 @@ const net = {
       if (started) return;
       started = true;
       $("#mp-code").textContent = this.code;
-      setNetStatus("Esperando amigo · " + this.code, "wait");
+      setNetStatus(this.auto ? "🔗 Sala · esperando a tu amigo" : "Esperando amigo · " + this.code, "wait");
       if (mode === "link") {
         engine.onNetSend = (data, client) => this.hostSend(data, client, 0);
         engine.netStart(0);
@@ -786,14 +805,17 @@ const net = {
       console.error(err);
       if (err.type === "unavailable-id") {
         this.stop(true);
+        // En una sala, si el código ya está ocupado es que tu amigo ya es el anfitrión: te unes a él.
+        if (fixedCode) return this.join(fixedCode, { auto: this.auto });
         return this.host(mode);
       }
-      toast("Error de conexión: " + (err.type || err.message));
-      setNetStatus("Sin conexión", "bad");
+      if (this.peer !== peer) return;
+      // Si se cae solo el servidor de encuentro, los amigos ya conectados siguen jugando.
+      if (SIGNALING_ERRORS.includes(err.type) && this.conns.size) return reconnectLater(peer);
+      showNetError(explainPeerError(err));
+      if (SIGNALING_ERRORS.includes(err.type)) reconnectLater(peer);
     });
-    peer.on("disconnected", () => {
-      if (this.peer === peer && !peer.destroyed) peer.reconnect();
-    });
+    peer.on("disconnected", () => reconnectLater(peer));
     peer.on("connection", (conn) => this.acceptGuest(conn));
   },
 
@@ -828,7 +850,7 @@ const net = {
       this.sendJSON(conn, { t: "welcome", id });
       if (this.mode === "screen") this.call = this.peer.call(conn.peer, buildStream());
       setNetStatus(`👥 ${this.conns.size + 1} jugadores`, "ok");
-      toast("¡Tu amigo se ha unido!");
+      toast(this.mode === "link" ? "¡Tu amigo está conectado! Invitaos desde el menú multijugador del juego." : "¡Tu amigo se ha unido!", 5000);
       this.renderSession();
     };
     conn.on("open", () => {
@@ -870,9 +892,11 @@ const net = {
 
   /* ----- Invitado ----- */
 
-  join(code) {
-    if (this.role) this.stop(true);
+  join(code, opts = {}) {
+    if (this.role || this.peer) this.stop(true);
     this.code = code;
+    this.auto = !!opts.auto;
+    if (!opts.auto) this.autoPaused = false;
     history.replaceState(null, "", location.pathname);
     let peer;
     try {
@@ -880,19 +904,30 @@ const net = {
     } catch (e) {
       return toast("No se pudo iniciar el multijugador: " + e.message, 4000);
     }
-    toast("Conectando con " + code + "…", 4000);
+    if (!this.auto) toast("Conectando con " + code + "…", 4000);
     peer.on("open", () => {
       const conn = this.conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "raw" });
       conn.on("data", (msg) => this.onHostData(msg));
+      setTimeout(() => {
+        if (this.conn === conn && !conn.open) {
+          if (this.auto) return this.retryAuto();
+          showNetError("No se pudo conectar directamente con tu amigo. Suele pasar con algunos datos móviles: probad los dos con Wi‑Fi, y que tu amigo tenga la web abierta en pantalla.");
+          conn.close();
+        }
+      }, 20000);
       const gone = () => {
         if (this.conn !== conn) return;
         if (this.mode === "link" && this.role === "guest") engine.netStop();
+        const wasGuest = this.role === "guest";
+        lastNetError = "Se perdió la conexión con tu amigo. Si tenéis una sala guardada, os volveréis a conectar solos.";
         setNetStatus("Desconectado", "bad");
         if (this.role === "viewer") screenMsg("La partida ha terminado o se perdió la conexión.");
         else toast("Se perdió la conexión con tu amigo", 4000);
         this.role = null;
         this.conn = null;
         this.renderSession();
+        // En una sala, si el anfitrión se va, se vuelve a buscar (o a ser el anfitrión) solo.
+        if (wasGuest && this.room && engine) this.retryAuto();
       };
       conn.on("open", () => heartbeat(conn, gone));
       conn.on("close", gone);
@@ -911,13 +946,16 @@ const net = {
     });
     peer.on("error", (err) => {
       console.error(err);
-      const msg = err.type === "peer-unavailable"
-        ? "No existe ninguna partida con el código " + code + "."
-        : "No se pudo conectar (" + (err.type || err.message) + ").";
-      setNetStatus("Error", "bad");
+      if (this.peer !== peer) return;
+      // Si se cae solo el servidor de encuentro pero ya estás conectado con tu amigo, se sigue jugando.
+      if (SIGNALING_ERRORS.includes(err.type) && this.conn && this.conn.open) return reconnectLater(peer);
+      // En la sala automática, si tu amigo aún no ha llegado, se reintenta en silencio.
+      if (this.auto && err.type === "peer-unavailable") return this.retryAuto();
+      const msg = explainPeerError(err, code);
+      showNetError(msg);
       if (this.role === "viewer") screenMsg(msg);
-      else toast(msg, 5000);
     });
+    peer.on("disconnected", () => reconnectLater(peer));
   },
 
   onHostData(msg) {
@@ -946,10 +984,11 @@ const net = {
           if (this.conn && this.conn.open) this.conn.send(framed.buffer);
         };
         engine.netStart(m.id);
+        saveRoom(this.code);
         setNetStatus(`🔗 Conectado · J${m.id + 1}`, "ok");
         toast(this.hostGame && this.hostGame !== romName
           ? `Conectado. Ojo: tu ROM («${romName}») y la de tu amigo («${this.hostGame}») tienen nombres distintos; tienen que ser la misma versión.`
-          : "¡Conectado! Ya podéis usar el modo multijugador del juego.", 6000);
+          : "¡Conectados! Ya podéis invitaros desde el menú multijugador del juego.", 6000);
       }
       this.renderSession();
     } else if (m.t === "ctl") {
@@ -990,6 +1029,21 @@ const net = {
     if (!m.ctl) toast("Tu amigo ha desactivado tus controles");
   },
 
+  // Sala de amigos: al abrir un juego, el primero que llega es el anfitrión y el otro se une solo.
+  autoConnect() {
+    if (!engine || !this.room || this.role || this.peer || this.autoPaused || this.pendingLink) return;
+    this.auto = true;
+    this.host("link", this.room);
+  },
+
+  retryAuto() {
+    this.stop(true);
+    this.auto = true;
+    setNetStatus("🔗 Sala · buscando a tu amigo", "wait");
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => this.autoConnect(), 4000 + Math.random() * 2000);
+  },
+
   stop(silent) {
     if (engine && this.mode === "link") engine.netStop();
     if (this.call) this.call.close();
@@ -1003,11 +1057,67 @@ const net = {
     applyButtons();
     this.renderSession();
     if (!silent) {
+      this.autoPaused = true;
+      clearTimeout(this.retryTimer);
       setNetStatus("");
       toast("Multijugador terminado");
     }
   },
 };
+
+function loadRoom() {
+  try { return localStorage.getItem("gbaweb-sala") || ""; } catch (e) { return ""; }
+}
+
+function saveRoom(code) {
+  net.room = code;
+  try { localStorage.setItem("gbaweb-sala", code); } catch (e) { /* sin almacenamiento */ }
+}
+
+function forgetRoom() {
+  net.room = "";
+  try { localStorage.removeItem("gbaweb-sala"); } catch (e) { /* sin almacenamiento */ }
+}
+
+const SIGNALING_ERRORS = ["network", "server-error", "socket-error", "socket-closed", "disconnected"];
+let lastNetError = "";
+
+function explainPeerError(err, code) {
+  switch (err.type) {
+    case "peer-unavailable":
+      return `No se encuentra la partida ${code || ""}. Revisa el código y pide a tu amigo que tenga la web abierta en pantalla (si bloquea el móvil, la partida se cierra).`;
+    case "network":
+    case "server-error":
+    case "socket-error":
+    case "socket-closed":
+    case "disconnected":
+      return "Se perdió la conexión con el servidor que os pone en contacto. Revisa tu internet; se volverá a intentar solo.";
+    case "browser-incompatible":
+      return "Este navegador no permite conexiones directas. Usa Safari actualizado.";
+    case "webrtc":
+      return "No se pudo conectar directamente con tu amigo. Probad los dos con Wi‑Fi.";
+    default:
+      return "Error de conexión (" + (err.type || err.message) + "). Vuelve a intentarlo.";
+  }
+}
+
+function showNetError(msg) {
+  lastNetError = msg;
+  setNetStatus("⚠️ Error · toca aquí", "bad");
+  toast(msg, 7000);
+}
+
+function reconnectLater(peer) {
+  setTimeout(() => {
+    if (net.peer === peer && !peer.destroyed && peer.disconnected) {
+      try { peer.reconnect(); } catch (e) { /* se reintentará en el próximo aviso */ }
+    }
+  }, 2000);
+}
+
+$("#net-status").addEventListener("click", () => {
+  if (lastNetError && $("#net-status").classList.contains("bad")) toast(lastNetError, 7000);
+});
 
 function buildStream() {
   const stream = $("#game").captureStream(60);
