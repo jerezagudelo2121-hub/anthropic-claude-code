@@ -1,75 +1,45 @@
 "use strict";
 
-/* GBA Web: interfaz para iPhone sobre EmulatorJS (núcleo mGBA) + multijugador por WebRTC. */
+/* GBA Web: interfaz para iPhone sobre gpSP (WebAssembly) + multijugador por WebRTC. */
 
-const EJS_DATA = "vendor/emulatorjs/data/";
-const PEER_PREFIX = "gbaweb-v1-";
+const CORE_URL = "gpsp/gpsp.wasm";
+const PEER_PREFIX = "gbaweb-v2-";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  // Si tu red bloquea conexiones directas, añade aquí un servidor TURN:
+  // Si vuestra red bloquea conexiones directas, añade aquí un servidor TURN:
   // { urls: "turn:tu-servidor:3478", username: "usuario", credential: "clave" },
 ];
 const SLOTS = 3;
 const MAX_RECENT = 5;
+const MAX_GUESTS = 4; // el adaptador inalámbrico admite hasta 5 consolas
+const BROADCAST = 0xffff;
 
-// Índices de botones del RetroPad que usa EmulatorJS para GBA.
+// Bits del mando (RetroPad de libretro).
 const BUTTONS = { B: 0, SELECT: 2, START: 3, UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7, A: 8, L: 10, R: 11 };
-// Mismas teclas que EmulatorJS usa por defecto en el anfitrión.
 const KEYMAP = {
   ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT",
-  KeyZ: "A", KeyX: "B", KeyQ: "L", KeyE: "R", Enter: "START", KeyV: "SELECT",
+  KeyZ: "A", KeyX: "B", KeyQ: "L", KeyE: "R", KeyA: "L", KeyS: "R",
+  Enter: "START", KeyV: "SELECT", Backspace: "SELECT",
 };
+// Mando Bluetooth (mapeo estándar): botón derecho = A, inferior = B.
+const PADMAP = { 1: "A", 0: "B", 4: "L", 5: "R", 6: "L", 7: "R", 8: "SELECT", 9: "START", 12: "UP", 13: "DOWN", 14: "LEFT", 15: "RIGHT" };
 
 const $ = (sel) => document.querySelector(sel);
 
-/* ---------- Audio: se puede reanudar en iOS y se puede enviar al amigo ---------- */
-
-const audioContexts = [];
-(function patchAudio() {
-  const Base = window.AudioContext || window.webkitAudioContext;
-  if (!Base) return;
-  class TappedAudioContext extends Base {
-    constructor(...args) {
-      super(...args);
-      audioContexts.push(this);
-      try { this.__tap = this.createMediaStreamDestination(); } catch (e) { this.__tap = null; }
-    }
-  }
-  window.AudioContext = TappedAudioContext;
-  window.webkitAudioContext = TappedAudioContext;
-  // Todo lo que suena por los altavoces también va a una pista que se puede transmitir.
-  const connect = AudioNode.prototype.connect;
-  AudioNode.prototype.connect = function (dest, ...rest) {
-    const result = connect.call(this, dest, ...rest);
-    const tap = this.context && this.context.__tap;
-    if (tap && dest === this.context.destination) {
-      try { connect.call(this, tap); } catch (e) { /* ignorar */ }
-    }
-    return result;
-  };
-  const resume = () => audioContexts.forEach((c) => c.state !== "running" && c.resume().catch(() => {}));
-  ["touchend", "pointerdown", "keydown"].forEach((t) => window.addEventListener(t, resume, true));
-})();
-
-function gameAudioTrack() {
-  for (let i = audioContexts.length - 1; i >= 0; i--) {
-    const tap = audioContexts[i].__tap;
-    const track = tap && tap.stream.getAudioTracks()[0];
-    if (track) return track;
-  }
-  return null;
-}
-
-/* ---------- IndexedDB: ROMs recientes y estados guardados ---------- */
+/* ---------- IndexedDB: ROMs, partidas, estados y BIOS ---------- */
 
 const db = (() => {
   let dbp;
   const open = () => dbp || (dbp = new Promise((resolve, reject) => {
-    const req = indexedDB.open("gbaweb", 1);
+    const req = indexedDB.open("gbaweb", 2);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore("roms", { keyPath: "name" });
-      req.result.createObjectStore("states");
+      const d = req.result;
+      for (const name of ["roms", "states", "saves", "files"]) {
+        if (!d.objectStoreNames.contains(name)) {
+          d.createObjectStore(name, name === "roms" ? { keyPath: "name" } : undefined);
+        }
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -90,6 +60,8 @@ const db = (() => {
     all: (store) => run(store, "readonly", (s) => s.getAll()),
   };
 })();
+
+const safeGet = (store, key) => db.get(store, key).catch(() => undefined);
 
 /* ---------- Utilidades de interfaz ---------- */
 
@@ -131,8 +103,10 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
-function emu() {
-  return window.EJS_emulator && window.EJS_emulator.started ? window.EJS_emulator : null;
+function sameBytes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 /* ---------- Pantalla de inicio ---------- */
@@ -156,6 +130,13 @@ async function renderRecent() {
   $("#recent").hidden = roms.length === 0;
 }
 
+async function renderBios() {
+  const bios = await safeGet("files", "bios");
+  const el = $("#bios-status");
+  el.textContent = bios ? "Cargada ✓" : "No cargada";
+  el.classList.toggle("ok", !!bios);
+}
+
 async function rememberRom(file) {
   try {
     await db.put("roms", { name: file.name, data: file, lastPlayed: Date.now() });
@@ -172,97 +153,103 @@ $("#rom-input").addEventListener("change", (e) => {
   if (file) startGame(file);
 });
 
+$("#bios-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  const data = new Uint8Array(await file.arrayBuffer());
+  if (data.length !== 16384 || data[0] !== 0x18) {
+    return toast("Ese archivo no parece una BIOS de GBA (gba_bios.bin, 16 KB)", 4000);
+  }
+  await db.put("files", data, "bios");
+  renderBios();
+  toast("BIOS guardada");
+});
+
 $("#join-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const code = $("#join-code").value.trim().toUpperCase();
   if (code.length < 4) return toast("Escribe el código que te envió tu amigo");
-  joinGame(code);
+  net.join(code);
 });
 
-/* ---------- Arrancar el emulador (anfitrión / un jugador) ---------- */
+/* ---------- Arrancar el juego ---------- */
 
+let engine = null;
 let romName = "";
+let lastSave = null;
 
-function startGame(file) {
-  romName = baseName(file.name);
-  rememberRom(file);
-  document.body.classList.remove("guest");
+async function readRom(file) {
+  let data = new Uint8Array(await file.arrayBuffer());
+  let name = file.name;
+  if (data[0] === 0x50 && data[1] === 0x4b) { // .zip
+    const files = fflate.unzipSync(data, { filter: (f) => /\.(gba|agb|bin)$/i.test(f.name) });
+    const entry = Object.keys(files)[0];
+    if (!entry) throw new Error("El .zip no contiene ningún archivo .gba");
+    data = files[entry];
+    name = entry.split("/").pop();
+  }
+  return { data, name };
+}
+
+async function startGame(file) {
+  if (engine) return location.reload();
   showView("console");
-  $("#game-title").textContent = romName;
+  document.body.classList.remove("guest");
   screenMsg("Cargando…");
-
-  Object.assign(window, {
-    EJS_player: "#game",
-    EJS_core: "gba",
-    EJS_pathtodata: EJS_DATA,
-    EJS_gameUrl: file,
-    EJS_gameName: romName,
-    EJS_startOnLoaded: true,
-    EJS_DEBUG_XX: true, // carga los scripts sin minificar que incluimos
-    EJS_threads: false,
-    EJS_color: "#7b5cff",
-    EJS_backgroundColor: "#000000",
-    EJS_language: "es-ES",
-    EJS_defaultOptions: {
-      "virtual-gamepad": "disabled",
-      "save-save-interval": "30",
-      "save-state-location": "browser",
-    },
-    EJS_onGameStart: onGameStart,
-  });
-  const s = document.createElement("script");
-  s.src = EJS_DATA + "loader.js";
-  s.onerror = () => screenMsg("No se pudo cargar el emulador.");
-  document.body.appendChild(s);
+  try {
+    const rom = await readRom(file);
+    romName = baseName(rom.name);
+    $("#game-title").textContent = romName;
+    rememberRom(file);
+    const bios = await safeGet("files", "bios");
+    engine = await GbaEngine.create(CORE_URL, $("#game"));
+    if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
+    const saved = await safeGet("saves", romName);
+    if (saved) engine.setSave(saved);
+    lastSave = engine.getSave();
+    engine.onFrame = pollGamepads;
+    engine.resumeAudio();
+    engine.start();
+    screenMsg("");
+    renderSlots();
+    setInterval(persistSave, 5000);
+    if (net.pendingLink) net.sendReady();
+  } catch (err) {
+    console.error(err);
+    screenMsg("No se pudo cargar: " + err.message);
+  }
 }
 
-function onGameStart() {
-  screenMsg("");
-  renderSlots();
-  // iOS puede cerrar la pestaña sin avisar: guarda la partida al salir de la app.
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushSave();
-  });
-  window.addEventListener("pagehide", flushSave);
+async function persistSave() {
+  if (!engine) return;
+  const data = engine.getSave();
+  if (!data || sameBytes(data, lastSave)) return;
+  lastSave = data;
+  try { await db.put("saves", data, romName); } catch (e) { console.warn(e); }
 }
 
-function flushSave() {
-  const e = emu();
-  if (!e) return;
-  try { e.gameManager.saveSaveFiles(); } catch (err) { console.warn(err); }
-}
+// iOS puede cerrar la pestaña sin avisar: guarda al salir de la app.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistSave();
+});
+window.addEventListener("pagehide", persistSave);
 
-/* ---------- Entrada: mando táctil, teclado ---------- */
+["touchend", "pointerdown", "keydown"].forEach((t) =>
+  window.addEventListener(t, () => engine && engine.resumeAudio(), true));
 
-const local = new Uint8Array(12);   // botones pulsados en este dispositivo
-const remote = new Uint8Array(12);  // botones pulsados por el amigo (solo anfitrión)
-const applied = new Uint8Array(12); // lo que se le ha enviado al núcleo
-let fastForward = false;
+/* ---------- Entrada: mando táctil, teclado y mandos Bluetooth ---------- */
 
-function applyButton(i) {
-  const v = local[i] || (net.guestControl && remote[i]) ? 1 : 0;
-  if (v === applied[i]) return;
-  applied[i] = v;
-  const e = emu();
-  if (e) e.gameManager.simulateInput(0, i, v);
-}
+let touchMask = 0, keyMask = 0, padMask = 0, remoteMask = 0;
 
-function setLocal(name, pressed) {
-  if (name === "FF") return setFastForward(pressed);
-  const i = BUTTONS[name];
-  const v = pressed ? 1 : 0;
-  if (local[i] === v) return;
-  local[i] = v;
-  if (net.role === "guest") net.send({ t: "k", b: i, v });
-  else applyButton(i);
-}
-
-function setFastForward(on) {
-  const e = emu();
-  if (!e || net.role === "guest" || on === fastForward) return;
-  fastForward = on;
-  e.gameManager.toggleFastForward(on ? 1 : 0);
-  $("[data-action=ff]").classList.toggle("on", on);
+function applyButtons() {
+  const mask = touchMask | keyMask | padMask;
+  if (net.role === "viewer") {
+    if (mask !== applyButtons.sent) net.sendJSON(net.conn, { t: "k", m: mask });
+    applyButtons.sent = mask;
+    return;
+  }
+  if (engine) engine.buttons = mask | (net.mode === "screen" && net.guestControl ? remoteMask : 0);
 }
 
 const pad = $("#pad");
@@ -297,19 +284,13 @@ function hitTest(x, y, zone, out) {
 function updatePressed(points) {
   const next = new Set();
   for (const p of points) hitTest(p.x, p.y, p.zone, next);
-  for (const name of pressedNow) if (!next.has(name)) release(name);
-  for (const name of next) if (!pressedNow.has(name)) press(name);
+  for (const name of pressedNow) if (!next.has(name)) (arms[name] || padButtons[name]).classList.remove("on");
+  for (const name of next) if (!pressedNow.has(name)) (arms[name] || padButtons[name]).classList.add("on");
   pressedNow = next;
-}
-
-function press(name) {
-  (arms[name] || padButtons[name]).classList.add("on");
-  setLocal(name, true);
-}
-
-function release(name) {
-  (arms[name] || padButtons[name]).classList.remove("on");
-  setLocal(name, false);
+  touchMask = 0;
+  for (const name of next) if (name in BUTTONS) touchMask |= 1 << BUTTONS[name];
+  setFastForward(next.has("FF"));
+  applyButtons();
 }
 
 function onTouch(e) {
@@ -343,23 +324,52 @@ window.addEventListener("pointerup", (e) => {
   updatePressed([]);
 });
 
-// En el anfitrión el teclado lo gestiona EmulatorJS; el invitado usa el mismo esquema.
 function onKey(e) {
-  if (net.role !== "guest" || !$("#menu").hidden) return;
+  if (!$("#menu").hidden || $("#console").hidden) return;
   const name = KEYMAP[e.code];
   if (!name) return;
   e.preventDefault();
-  setLocal(name, e.type === "keydown");
+  const bit = 1 << BUTTONS[name];
+  keyMask = e.type === "keydown" ? keyMask | bit : keyMask & ~bit;
+  applyButtons();
 }
 window.addEventListener("keydown", onKey);
 window.addEventListener("keyup", onKey);
+
+function pollGamepads() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let mask = 0;
+  for (const gp of pads) {
+    if (!gp) continue;
+    gp.buttons.forEach((b, i) => {
+      if (b.pressed && PADMAP[i]) mask |= 1 << BUTTONS[PADMAP[i]];
+    });
+    const [x = 0, y = 0] = gp.axes;
+    if (x < -0.5) mask |= 1 << BUTTONS.LEFT;
+    if (x > 0.5) mask |= 1 << BUTTONS.RIGHT;
+    if (y < -0.5) mask |= 1 << BUTTONS.UP;
+    if (y > 0.5) mask |= 1 << BUTTONS.DOWN;
+  }
+  if (mask !== padMask) {
+    padMask = mask;
+    applyButtons();
+  }
+}
+
+let fastForward = false;
+function setFastForward(on) {
+  if (!engine || on === fastForward) return;
+  fastForward = on;
+  engine.fastForward = on;
+  padButtons.FF.classList.toggle("on", on);
+}
 
 /* ---------- Menú ---------- */
 
 function openMenu() {
   updatePressed([]);
   $("#menu").hidden = false;
-  if (net.role !== "guest") renderSlots();
+  if (engine) renderSlots();
 }
 
 function closeMenu() {
@@ -377,8 +387,7 @@ async function renderSlots() {
   const wrap = $("#slots");
   wrap.innerHTML = "";
   for (let slot = 1; slot <= SLOTS; slot++) {
-    let saved = null;
-    try { saved = await db.get("states", stateKey(slot)); } catch (e) { /* sin IndexedDB */ }
+    const saved = await safeGet("states", stateKey(slot));
     const div = document.createElement("div");
     div.className = "slot";
     div.innerHTML = `<b>Ranura ${slot}</b><small>${saved ? timeAgo(saved.time) : "Vacía"}</small>
@@ -389,20 +398,18 @@ async function renderSlots() {
 }
 
 $("#slots").addEventListener("click", async (e) => {
-  const em = emu();
-  if (!em) return;
+  if (!engine) return;
   const saveSlot = e.target.dataset.save;
   const loadSlot = e.target.dataset.load;
   try {
     if (saveSlot) {
-      const data = em.gameManager.getState().slice();
-      await db.put("states", { data, time: Date.now() }, stateKey(saveSlot));
+      await db.put("states", { data: engine.saveState(), time: Date.now() }, stateKey(saveSlot));
       toast(`Guardado en la ranura ${saveSlot}`);
       renderSlots();
     } else if (loadSlot) {
       const saved = await db.get("states", stateKey(loadSlot));
       if (!saved) return;
-      em.gameManager.loadState(saved.data);
+      engine.loadState(saved.data);
       toast(`Cargada la ranura ${loadSlot}`);
       closeMenu();
     }
@@ -414,33 +421,29 @@ $("#slots").addEventListener("click", async (e) => {
 
 const actions = {
   "close-menu": closeMenu,
-  quit: () => {
-    flushSave();
-    net.stop();
-    setTimeout(() => location.replace(location.pathname), 150);
+  quit: async () => {
+    await persistSave();
+    net.stop(true);
+    location.replace(location.pathname);
   },
   mute: (btn) => {
-    const em = emu();
-    if (!em) return;
-    em.muted = !em.muted;
-    em.setVolume(em.muted ? 0 : em.volume);
-    btn.textContent = em.muted ? "🔇 Sin sonido" : "🔊 Sonido";
+    if (!engine) return;
+    engine.setMuted(!engine.muted);
+    btn.textContent = engine.muted ? "🔇 Sin sonido" : "🔊 Sonido";
   },
   "ff-toggle": (btn) => {
     setFastForward(!fastForward);
     btn.textContent = fastForward ? "⏩ Velocidad x1" : "⏩ Velocidad x2";
   },
   restart: () => {
-    const em = emu();
-    if (em && confirm("¿Reiniciar el juego? Se perderá lo que no hayas guardado.")) {
-      em.gameManager.restart();
+    if (engine && confirm("¿Reiniciar el juego? Se perderá lo que no hayas guardado.")) {
+      engine.reset();
       closeMenu();
     }
   },
   "export-save": () => {
-    const em = emu();
-    const data = em && em.gameManager.getSaveFile();
-    if (!data) return toast("Este juego aún no tiene partida guardada");
+    const data = engine && engine.getSave();
+    if (!data) return toast("Este juego no tiene partida guardada");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([data]));
     a.download = romName + ".sav";
@@ -454,15 +457,16 @@ const actions = {
     if (req) req.call(el);
     else toast("En iPhone: Compartir → Añadir a pantalla de inicio");
   },
-  host: () => net.host(),
-  "stop-host": () => net.stop(),
+  "host-link": () => net.host("link"),
+  "host-screen": () => net.host("screen"),
+  "stop-net": () => net.stop(),
   share: () => {
     const url = net.inviteUrl();
-    if (navigator.share) {
-      navigator.share({ title: "GBA Web", text: `¡Juega conmigo a ${romName}! Código: ${net.code}`, url }).catch(() => {});
-    } else {
-      actions.copy();
-    }
+    const text = net.mode === "link"
+      ? `¡Juguemos juntos a ${romName}! Abre el enlace y carga tu ROM. Código: ${net.code}`
+      : `¡Mira mi partida de ${romName}! Código: ${net.code}`;
+    if (navigator.share) navigator.share({ title: "GBA Web", text, url }).catch(() => {});
+    else actions.copy();
   },
   copy: () => {
     navigator.clipboard.writeText(net.inviteUrl()).then(
@@ -483,158 +487,216 @@ $("#menu").addEventListener("click", (e) => {
   if (btn && actions[btn.dataset.action]) actions[btn.dataset.action](btn);
 });
 
+$("#menu-join").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const code = $("#menu-join-code").value.trim().toUpperCase();
+  if (code.length < 4) return toast("Escribe el código de tu amigo");
+  closeMenu();
+  net.join(code);
+});
+
 $("#sav-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   e.target.value = "";
-  const em = emu();
-  if (!file || !em) return;
-  const gm = em.gameManager;
-  gm.FS.writeFile(gm.getSaveFilePath(), new Uint8Array(await file.arrayBuffer()));
-  gm.loadSaveFiles();
-  gm.restart();
+  if (!file || !engine) return;
+  engine.setSave(new Uint8Array(await file.arrayBuffer()));
+  engine.reset();
+  await persistSave();
   toast("Partida importada");
   closeMenu();
 });
 
 $("#guest-control").addEventListener("change", (e) => {
   net.guestControl = e.target.checked;
-  for (let i = 0; i < 12; i++) applyButton(i);
-  net.send({ t: "ctl", on: net.guestControl });
+  applyButtons();
+  for (const conn of net.conns.values()) net.sendJSON(conn, { t: "ctl", on: net.guestControl });
 });
 
 /* ---------- Multijugador online (WebRTC con PeerJS) ----------
- * El anfitrión ejecuta el juego y transmite imagen y sonido; el invitado envía sus botones.
- * Ambos controlan la misma consola, como dos personas compartiendo una Game Boy.
+ * Modo "link": cada uno ejecuta su propio juego y los paquetes del adaptador
+ *   inalámbrico de la GBA viajan entre consolas (como el netplay de RetroArch con gpSP).
+ *   El anfitrión es el cliente 0 y reenvía lo que haga falta entre invitados.
+ * Modo "screen": el anfitrión transmite imagen y sonido; el invitado manda sus botones.
  */
 
 const net = {
-  role: null, // null | "host" | "guest"
+  role: null,   // "host" | "guest" (link) | "viewer" (screen)
+  mode: null,   // "link" | "screen"
   peer: null,
-  conn: null,
+  conn: null,   // invitado: conexión con el anfitrión
+  conns: new Map(), // anfitrión: id de cliente -> conexión
   call: null,
   code: "",
   guestControl: true,
+  pendingLink: false,
 
   inviteUrl() {
     return `${location.origin}${location.pathname}?join=${this.code}`;
   },
 
-  send(msg) {
-    if (this.conn && this.conn.open) this.conn.send(msg);
+  sendJSON(conn, msg) {
+    if (conn && conn.open) conn.send(JSON.stringify(msg));
   },
 
   newPeer(id) {
     if (!window.Peer) throw new Error("PeerJS no está disponible");
     // window.GBA_PEER_OPTIONS permite usar un servidor PeerJS propio ({ host, port, path, secure }).
-    return new Peer(id, { config: { iceServers: ICE_SERVERS }, debug: 1, ...window.GBA_PEER_OPTIONS });
+    const opts = { config: { iceServers: ICE_SERVERS }, debug: 1, ...window.GBA_PEER_OPTIONS };
+    return id ? new Peer(id, opts) : new Peer(opts);
   },
 
-  host() {
-    if (this.role === "host") return;
-    if (!emu()) return toast("Espera a que cargue el juego");
+  renderSession() {
+    const active = !!this.role;
+    $("#mp-host").hidden = active;
+    $("#mp-session").hidden = !active;
+    if (!active) return;
+    const isHost = this.role === "host";
+    $("#mp-code-box").hidden = !isHost;
+    $("#guest-control-row").hidden = !(isHost && this.mode === "screen");
+    $("#mp-mode").textContent = this.mode === "link"
+      ? "🔗 Jugar juntos: cada uno con su partida."
+      : "📺 Compartiendo pantalla.";
+    let players = "";
+    if (isHost) players = this.conns.size ? `Conectados: ${this.conns.size + 1} jugadores` : "Esperando a tu amigo…";
+    else if (this.role === "guest") players = `Conectado a la partida de tu amigo (código ${this.code}).`;
+    $("#mp-players").textContent = players;
+  },
+
+  /* ----- Anfitrión ----- */
+
+  host(mode) {
+    if (this.role) return;
+    if (!engine) return toast("Espera a que cargue el juego");
     this.role = "host";
+    this.mode = mode;
     this.code = randomCode();
-    $("#mp-host").hidden = true;
-    $("#mp-session").hidden = false;
     $("#mp-code").textContent = "······";
+    this.renderSession();
     setNetStatus("Conectando…", "wait");
 
     const peer = this.peer = this.newPeer(PEER_PREFIX + this.code);
     peer.on("open", () => {
       $("#mp-code").textContent = this.code;
       setNetStatus("Esperando amigo · " + this.code, "wait");
+      if (mode === "link") {
+        engine.onNetSend = (data, client) => this.hostSend(data, client, 0);
+        engine.netStart(0);
+      }
     });
     peer.on("error", (err) => {
       console.error(err);
       if (err.type === "unavailable-id") {
         this.stop(true);
-        return this.host();
+        return this.host(mode);
       }
-      if (err.type === "peer-unavailable") return;
       toast("Error de conexión: " + (err.type || err.message));
       setNetStatus("Sin conexión", "bad");
     });
     peer.on("disconnected", () => {
       if (this.peer === peer && !peer.destroyed) peer.reconnect();
     });
-    peer.on("connection", (conn) => {
-      if (this.conn && this.conn.open) {
-        conn.on("open", () => {
-          conn.send({ t: "full" });
-          setTimeout(() => conn.close(), 500);
-        });
-        return;
-      }
-      this.conn = conn;
-      conn.on("open", () => {
-        conn.send({ t: "hello", game: romName, ctl: this.guestControl });
-        this.call = peer.call(conn.peer, this.buildStream());
-        setNetStatus("👥 Amigo conectado", "ok");
-        toast("¡Tu amigo se ha unido!");
-        heartbeat(conn, gone);
-      });
-      conn.on("data", (msg) => {
-        if (msg && msg.t === "k" && msg.b in remote) {
-          remote[msg.b] = msg.v ? 1 : 0;
-          applyButton(msg.b);
-        }
-      });
-      const gone = () => {
-        if (this.conn !== conn) return;
-        this.conn = null;
+    peer.on("connection", (conn) => this.acceptGuest(conn));
+  },
+
+  acceptGuest(conn) {
+    let id = 0;
+    const gone = () => {
+      if (!id || this.conns.get(id) !== conn) return;
+      this.conns.delete(id);
+      if (this.mode === "link") engine.netDisconnected(id);
+      else {
         if (this.call) this.call.close();
         this.call = null;
-        remote.fill(0);
-        for (let i = 0; i < 12; i++) applyButton(i);
-        if (this.role === "host") {
-          setNetStatus("Esperando amigo · " + this.code, "wait");
-          toast("Tu amigo se ha desconectado");
-        }
-      };
-      conn.on("close", gone);
-      conn.on("error", gone);
+        remoteMask = 0;
+        applyButtons();
+      }
+      if (this.role === "host") {
+        setNetStatus(this.conns.size ? `👥 ${this.conns.size + 1} jugadores` : "Esperando amigo · " + this.code, this.conns.size ? "ok" : "wait");
+        toast("Tu amigo se ha desconectado");
+        this.renderSession();
+      }
+    };
+    const admit = () => {
+      const max = this.mode === "link" ? MAX_GUESTS : 1;
+      for (let i = 1; i <= max && !id; i++) if (!this.conns.has(i)) id = i;
+      if (!id || (this.mode === "link" && !engine.netConnected(id))) {
+        id = 0;
+        this.sendJSON(conn, { t: "full" });
+        setTimeout(() => conn.close(), 500);
+        return;
+      }
+      this.conns.set(id, conn);
+      this.sendJSON(conn, { t: "welcome", id });
+      if (this.mode === "screen") this.call = this.peer.call(conn.peer, buildStream());
+      setNetStatus(`👥 ${this.conns.size + 1} jugadores`, "ok");
+      toast("¡Tu amigo se ha unido!");
+      this.renderSession();
+    };
+    conn.on("open", () => {
+      heartbeat(conn, gone);
+      this.sendJSON(conn, { t: "hello", mode: this.mode, game: romName, ctl: this.guestControl });
+      if (this.mode === "screen") admit();
     });
+    conn.on("data", (msg) => {
+      if (typeof msg === "string") {
+        const m = parseJSON(msg);
+        if (!m) return;
+        if (m.t === "ready" && this.mode === "link" && !id) admit();
+        else if (m.t === "k" && this.mode === "screen") {
+          remoteMask = m.m | 0;
+          applyButtons();
+        }
+      } else if (id && this.mode === "link") {
+        const bytes = new Uint8Array(msg);
+        const dest = bytes[0] | (bytes[1] << 8);
+        const payload = bytes.subarray(2);
+        if (dest === 0 || dest === BROADCAST) engine.netReceive(id, payload.slice());
+        if (dest !== 0) this.hostSend(payload, dest, id);
+      }
+    });
+    conn.on("close", gone);
+    conn.on("error", gone);
   },
 
-  buildStream() {
-    const canvas = emu().canvas;
-    const stream = canvas.captureStream(60);
-    const audio = gameAudioTrack();
-    if (audio) stream.addTrack(audio);
-    return stream;
+  // Envía un paquete a un invitado (o a todos) indicando quién lo originó.
+  hostSend(data, dest, src) {
+    const framed = new Uint8Array(data.length + 2);
+    framed[0] = src & 0xff;
+    framed[1] = src >> 8;
+    framed.set(data, 2);
+    for (const [cid, conn] of this.conns) {
+      if (cid !== src && (dest === BROADCAST || dest === cid) && conn.open) conn.send(framed.buffer);
+    }
   },
+
+  /* ----- Invitado ----- */
 
   join(code) {
-    this.role = "guest";
+    if (this.role) this.stop(true);
     this.code = code;
-    const peer = this.peer = this.newPeer();
-    setNetStatus("Conectando…", "wait");
-    screenMsg("Conectando con la partida " + code + "…");
-
+    history.replaceState(null, "", location.pathname);
+    let peer;
+    try {
+      peer = this.peer = this.newPeer();
+    } catch (e) {
+      return toast("No se pudo iniciar el multijugador: " + e.message, 4000);
+    }
+    toast("Conectando con " + code + "…", 4000);
     peer.on("open", () => {
-      const conn = this.conn = peer.connect(PEER_PREFIX + code, { reliable: true });
-      conn.on("open", () => {
-        setNetStatus("👥 Conectado", "ok");
-        screenMsg("Esperando la imagen…");
-      });
-      conn.on("data", (msg) => {
-        if (!msg) return;
-        if (msg.t === "hello") {
-          $("#game-title").textContent = "Partida de tu amigo · " + msg.game;
-          if (!msg.ctl) toast("Tu amigo ha desactivado tus controles");
-        } else if (msg.t === "ctl") {
-          toast(msg.on ? "Ya puedes usar los controles" : "Tu amigo ha desactivado tus controles");
-        } else if (msg.t === "full") {
-          screenMsg("La partida ya tiene un invitado.");
-        }
-      });
+      const conn = this.conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "raw" });
+      conn.on("data", (msg) => this.onHostData(msg));
       const gone = () => {
+        if (this.conn !== conn) return;
+        if (this.mode === "link" && this.role === "guest") engine.netStop();
         setNetStatus("Desconectado", "bad");
-        screenMsg("La partida ha terminado o se perdió la conexión.");
-        $("#remote-video").hidden = true;
+        if (this.role === "viewer") screenMsg("La partida ha terminado o se perdió la conexión.");
+        else toast("Se perdió la conexión con tu amigo", 4000);
+        this.role = null;
+        this.conn = null;
+        this.renderSession();
       };
-      conn.on("close", gone);
       conn.on("open", () => heartbeat(conn, gone));
+      conn.on("close", gone);
     });
     peer.on("call", (call) => {
       this.call = call;
@@ -650,44 +712,124 @@ const net = {
     });
     peer.on("error", (err) => {
       console.error(err);
+      const msg = err.type === "peer-unavailable"
+        ? "No existe ninguna partida con el código " + code + "."
+        : "No se pudo conectar (" + (err.type || err.message) + ").";
       setNetStatus("Error", "bad");
-      screenMsg(err.type === "peer-unavailable"
-        ? "No existe ninguna partida con el código " + code + ". Revisa el código."
-        : "No se pudo conectar (" + (err.type || err.message) + ").");
+      if (this.role === "viewer") screenMsg(msg);
+      else toast(msg, 5000);
     });
   },
 
+  onHostData(msg) {
+    if (typeof msg !== "string") {
+      if (this.role !== "guest") return;
+      const bytes = new Uint8Array(msg);
+      engine.netReceive(bytes[0] | (bytes[1] << 8), bytes.slice(2));
+      return;
+    }
+    const m = parseJSON(msg);
+    if (!m) return;
+    if (m.t === "hello") {
+      this.mode = m.mode;
+      if (m.mode === "screen") this.becomeViewer(m);
+      else if (engine) this.sendReady();
+      else this.waitForRom(m.game);
+    } else if (m.t === "welcome") {
+      if (this.mode === "link") {
+        this.role = "guest";
+        engine.onNetSend = (data, client) => {
+          const framed = new Uint8Array(data.length + 2);
+          framed[0] = client & 0xff;
+          framed[1] = client >> 8;
+          framed.set(data, 2);
+          if (this.conn && this.conn.open) this.conn.send(framed.buffer);
+        };
+        engine.netStart(m.id);
+        setNetStatus(`🔗 Conectado · J${m.id + 1}`, "ok");
+        toast("¡Conectado! Ya podéis usar el modo multijugador del juego.", 4000);
+      }
+      this.renderSession();
+    } else if (m.t === "ctl") {
+      toast(m.on ? "Ya puedes usar los controles" : "Tu amigo ha desactivado tus controles");
+    } else if (m.t === "full") {
+      toast("La partida de tu amigo ya está llena.", 4000);
+      if (this.role === "viewer") screenMsg("La partida ya tiene un invitado.");
+    }
+  },
+
+  waitForRom(game) {
+    this.pendingLink = true;
+    showView("home");
+    const banner = $("#invite-banner");
+    banner.hidden = false;
+    banner.textContent = `🔗 Tu amigo te espera en «${game}». Carga tu ROM (la misma versión) para jugar juntos.`;
+    setNetStatus("Esperando tu ROM", "wait");
+  },
+
+  sendReady() {
+    this.pendingLink = false;
+    this.sendJSON(this.conn, { t: "ready", game: romName });
+    setNetStatus("Conectando…", "wait");
+  },
+
+  becomeViewer(m) {
+    if (engine) {
+      persistSave();
+      engine.stop();
+      engine.setMuted(true);
+    }
+    this.role = "viewer";
+    document.body.classList.add("guest");
+    showView("console");
+    $("#game-title").textContent = "Partida de tu amigo · " + m.game;
+    setNetStatus("👥 Conectado", "ok");
+    screenMsg("Esperando la imagen…");
+    if (!m.ctl) toast("Tu amigo ha desactivado tus controles");
+  },
+
   stop(silent) {
+    if (engine && this.mode === "link") engine.netStop();
     if (this.call) this.call.close();
     if (this.conn) this.conn.close();
+    for (const conn of this.conns.values()) conn.close();
     if (this.peer) this.peer.destroy();
     this.peer = this.conn = this.call = null;
-    remote.fill(0);
-    for (let i = 0; i < 12; i++) applyButton(i);
-    if (this.role === "host") {
-      this.role = null;
-      $("#mp-host").hidden = false;
-      $("#mp-session").hidden = true;
-      if (!silent) {
-        setNetStatus("");
-        toast("Multijugador terminado");
-      }
+    this.conns.clear();
+    this.role = this.mode = null;
+    remoteMask = 0;
+    applyButtons();
+    this.renderSession();
+    if (!silent) {
+      setNetStatus("");
+      toast("Multijugador terminado");
     }
   },
 };
+
+function buildStream() {
+  const stream = $("#game").captureStream(60);
+  const audio = engine.streamDest && engine.streamDest.stream.getAudioTracks()[0];
+  if (audio) stream.addTrack(audio);
+  return stream;
+}
+
+function parseJSON(s) {
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
 
 // Al cerrar la app en el móvil la conexión no siempre avisa: se comprueba con pings.
 function heartbeat(conn, onGone) {
   let lastSeen = Date.now();
   conn.on("data", () => (lastSeen = Date.now()));
   const timer = setInterval(() => {
-    if (!conn.open || Date.now() - lastSeen > 8000) {
+    if (!conn.open || Date.now() - lastSeen > 10000) {
       clearInterval(timer);
       conn.close();
       onGone();
       return;
     }
-    conn.send({ t: "ping" });
+    net.sendJSON(conn, { t: "ping" });
   }, 2000);
 }
 
@@ -697,21 +839,9 @@ function randomCode() {
   return [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
 }
 
-function joinGame(code) {
-  document.body.classList.add("guest");
-  showView("console");
-  $("#game-title").textContent = "Partida de tu amigo";
-  history.replaceState(null, "", location.pathname);
-  try {
-    net.join(code);
-  } catch (e) {
-    screenMsg("No se pudo iniciar el multijugador: " + e.message);
-  }
-}
-
 /* ---------- Inicio ---------- */
 
-const params = new URLSearchParams(location.search);
-const joinCode = (params.get("join") || "").trim().toUpperCase();
-if (joinCode) joinGame(joinCode);
-else renderRecent();
+renderRecent();
+renderBios();
+const joinCode = (new URLSearchParams(location.search).get("join") || "").trim().toUpperCase();
+if (joinCode) net.join(joinCode);
