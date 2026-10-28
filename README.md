@@ -12,7 +12,8 @@ Incluye **multijugador online** para jugar con un amigo.
   de avance rápido ⏩ (mantener pulsado). Se puede deslizar el dedo entre botones.
 - Vista vertical y horizontal.
 - **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
-- **3 ranuras de guardado rápido** (save states), velocidad x2, silenciar, reiniciar.
+- **3 ranuras de guardado rápido** (save states), silenciar, reiniciar.
+- **Velocidad x1, x2, x3, x4 y x8** desde el menú, o manteniendo ⏩ (x4). Se desactiva en multijugador.
 - Exportar / importar el archivo `.sav` (por ejemplo, para pasar tu partida del Android).
 - **Biblioteca de juegos**: añade varias ROMs a la vez y quedan guardadas en el móvil, con la
   portada de cada juego (una captura de su pantalla), buscador, renombrar y eliminar.

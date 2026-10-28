@@ -516,9 +516,11 @@ function pollGamepads() {
   }
 }
 
-// Avance rápido: botón ⏩ mantenido o interruptor del menú. En multijugador se desactiva,
-// porque la otra consola seguiría a velocidad normal y se perdería la conexión.
-let ffHold = false, ffToggle = false;
+// Avance rápido: velocidad elegida en el menú (x1–x8) o botón ⏩ mantenido (al menos x4).
+// En multijugador se desactiva: la otra consola seguiría a velocidad normal y se perdería la conexión.
+const HOLD_SPEED = 4;
+let ffHold = false;
+let chosenSpeed = 1;
 
 function linkActive() {
   return net.mode === "link" && (net.role === "host" || net.role === "guest");
@@ -530,21 +532,35 @@ function ffAllowed() {
 
 function updateFastForward() {
   const allowed = ffAllowed();
-  if (!allowed) ffToggle = false;
-  const on = !!engine && allowed && (ffHold || ffToggle);
-  if (engine) engine.fastForward = on;
-  padButtons.FF.classList.toggle("on", on);
+  if (!allowed) chosenSpeed = 1;
+  const speed = !allowed ? 1 : ffHold ? Math.max(chosenSpeed, HOLD_SPEED) : chosenSpeed;
+  if (engine) engine.speed = speed;
+  padButtons.FF.classList.toggle("on", speed > 1);
   padButtons.FF.classList.toggle("disabled", !allowed);
-  const btn = $("[data-action=ff-toggle]");
-  btn.textContent = !allowed ? "⏩ No disponible online" : ffToggle ? "⏩ Velocidad x1" : "⏩ Velocidad x2";
-  btn.disabled = !allowed;
+  padButtons.FF.textContent = chosenSpeed > 1 ? "⏩x" + chosenSpeed : "⏩";
+  for (const btn of document.querySelectorAll("[data-speed]")) {
+    btn.classList.toggle("primary", Number(btn.dataset.speed) === chosenSpeed);
+    btn.disabled = !allowed;
+  }
+  $("#speed-note").textContent = allowed ? "(mantén ⏩ para ir a x" + HOLD_SPEED + ")" : "(no disponible online)";
 }
+
+$("#speeds").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-speed]");
+  if (!btn) return;
+  if (!ffAllowed()) return toast("La velocidad rápida no funciona en multijugador");
+  chosenSpeed = Number(btn.dataset.speed);
+  updateFastForward();
+  closeMenu();
+  toast(chosenSpeed === 1 ? "Velocidad normal" : "Velocidad x" + chosenSpeed);
+});
 
 /* ---------- Menú ---------- */
 
 function openMenu() {
   updatePressed([]);
   $("#menu").hidden = false;
+  updateFastForward();
   if (engine) renderSlots();
 }
 
@@ -608,12 +624,6 @@ const actions = {
     if (!engine) return;
     engine.setMuted(!engine.muted);
     btn.textContent = engine.muted ? "🔇 Sin sonido" : "🔊 Sonido";
-  },
-  "ff-toggle": () => {
-    if (!ffAllowed()) return toast("La velocidad rápida no funciona en multijugador");
-    ffToggle = !ffToggle;
-    updateFastForward();
-    closeMenu();
   },
   restart: () => {
     if (linkActive()) return toast("Termina el multijugador para reiniciar", 3500);

@@ -21,7 +21,7 @@ class GbaEngine {
     }
     this.buttons = 0;
     this.running = false;
-    this.fastForward = false;
+    this.speed = 1;          // 1 = normal; 2, 3, 4, 8 = avance rápido
     this.muted = false;
     this.netQueue = [];      // paquetes recibidos: { client, data }
     this.onNetSend = null;   // (Uint8Array, clientId) => void
@@ -91,17 +91,18 @@ class GbaEngine {
     const tick = (now) => {
       if (!this.running) return;
       // El ritmo depende del tiempo real, no de los Hz de la pantalla (60 o 120 en iPhone).
-      const speed = this.fastForward ? 2 : 1;
+      const speed = this.speed;
       this.debt += Math.min(now - this.last, 100) * this.fps * speed / 1000;
       this.last = now;
-      if (!this.fastForward) {
+      if (speed === 1) {
         // Ajuste fino con el búfer de audio para que no se corte el sonido.
         const level = this.audioLevel();
         if (level > 0.75) this.debt -= 0.25;
         else if (level < 0.2 && this.audioOn) this.debt += 0.25;
       }
       const frames = Math.min(Math.floor(this.debt), 4 * speed);
-      this.debt -= frames;
+      // Si el móvil no llega a la velocidad pedida, va lo más rápido que puede sin acumular retraso.
+      this.debt = Math.min(this.debt - frames, 4 * speed);
       for (let i = 0; i < frames; i++) this.runFrame(i === frames - 1);
       requestAnimationFrame(tick);
     };
@@ -173,7 +174,7 @@ class GbaEngine {
 
   pushAudio() {
     const frames = this.ex.fe_audio_frames();
-    if (!this.ring || !frames || this.fastForward) return;
+    if (!this.ring || !frames || this.speed !== 1) return;
     const src = new Int16Array(this.ex.memory.buffer, this.ex.fe_audio(), frames * 2);
     const size = this.ring.length / 2;
     for (let i = 0; i < frames; i++) {
