@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>GBA Web</title>
 <meta name="description" content="Emulador de Game Boy Advance en el navegador, con multijugador online.">
-<meta name="theme-color" content="#1b1b2f">
+<meta name="theme-color" content="#120f24">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -95,7 +95,8 @@
 <!-- Consola -->
 <section id="console" class="view" hidden>
   <header class="topbar">
-    <button id="btn-menu" class="icon-btn" aria-label="Menú">☰</button>
+    <button id="btn-menu" class="icon-btn menu-btn" aria-label="Menú">☰</button>
+    <span class="power-led" aria-hidden="true"></span>
     <div id="game-title" class="game-title"></div>
     <div id="net-status" class="net-pill" hidden></div>
   </header>
@@ -109,8 +110,8 @@
   </div>
 
   <div id="pad" class="pad" aria-label="Mando">
-    <div class="shoulder l" data-btn="L">L</div>
-    <div class="shoulder r" data-btn="R">R</div>
+    <div class="shoulder l key" data-btn="L">L</div>
+    <div class="shoulder r key" data-btn="R">R</div>
     <div class="dpad" data-dpad>
       <div class="arm up"></div><div class="arm down"></div><div class="arm left"></div><div class="arm right"></div><div class="hub"></div>
     </div>
@@ -119,81 +120,111 @@
       <div class="face a" data-btn="A">A</div>
     </div>
     <div class="meta">
-      <div class="pill" data-btn="SELECT">SELECT</div>
-      <div class="pill" data-btn="START">START</div>
+      <div class="pill key" data-btn="SELECT">SELECT</div>
+      <div class="pill key" data-btn="START">START</div>
     </div>
-    <div class="turbo" data-action="ff" aria-label="Avance rápido">⏩</div>
+    <div class="turbo key" data-action="ff" aria-label="Avance rápido">⏩</div>
   </div>
 </section>
 
 <!-- Menú -->
 <div id="menu" class="sheet" hidden>
   <div class="sheet-body">
-    <h2>Menú</h2>
-    <div class="host-only">
-      <h3>👥 Amigos</h3>
-      <div id="lobby" class="lobby" hidden></div>
-      <div class="friends-list"></div>
-      <form class="friend-add join-row">
-        <input type="text" maxlength="20" autocomplete="off" placeholder="Apodo de tu amigo" aria-label="Apodo de tu amigo">
-        <button class="btn" type="submit">Añadir</button>
-      </form>
-      <h3>Multijugador online</h3>
-      <div id="mp-host">
-        <button class="btn primary mp-option" data-action="host-link">
-          <span>🔗 Jugar juntos <small>cada uno con su partida</small></span>
-        </button>
-        <p class="hint">Como el cable link de la GBA (multijugador de Quetzal, combates, intercambios). Lo más fácil es pulsar <b>Invitar</b> en tu lista de amigos; esto crea una sala con código por si tu amigo aún no está en tu lista.</p>
-        <button class="btn mp-option" data-action="host-screen">
-          <span>📺 Compartir mi pantalla <small>una sola partida</small></span>
-        </button>
-        <p class="hint">Tu amigo ve tu juego en directo y puede usar los botones. No necesita la ROM.</p>
-        <form id="menu-join" class="join-row">
-          <input id="menu-join-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="CÓDIGO" aria-label="Código de un amigo">
-          <button class="btn" type="submit">Unirme</button>
-        </form>
-      </div>
-      <div id="mp-session" hidden>
-        <p id="mp-mode"></p>
-        <div id="mp-code-box">
-          <p>Código de la sala:</p>
-          <div class="code" id="mp-code">------</div>
-          <div class="grid">
-            <button class="btn primary" data-action="share">📤 Enviar invitación</button>
-            <button class="btn" data-action="copy">📋 Copiar enlace</button>
-          </div>
-        </div>
-        <p id="mp-players"></p>
-        <label class="toggle" id="guest-control-row"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
-        <button class="btn danger" data-action="stop-net">Terminar multijugador</button>
-      </div>
-      <h3>⏩ Velocidad <small id="speed-note"></small></h3>
-      <div class="speeds" id="speeds">
-        <button class="btn" data-speed="1">x1</button>
-        <button class="btn" data-speed="2">x2</button>
-        <button class="btn" data-speed="3">x3</button>
-        <button class="btn" data-speed="4">x4</button>
-        <button class="btn" data-speed="8">x8</button>
-      </div>
-      <h3>Guardado rápido</h3>
-      <div class="slots" id="slots"></div>
-      <h3>Opciones</h3>
-      <div class="grid">
-        <button class="btn" data-action="mute">🔊 Sonido</button>
-        <button class="btn" data-action="restart">🔄 Reiniciar</button>
-        <button class="btn" data-action="export-save">💾 Exportar .sav</button>
-        <button class="btn" data-action="import-save">📂 Importar .sav</button>
-        <button class="btn" data-action="fullscreen">⛶ Pantalla completa</button>
-      </div>
-      <input id="sav-input" type="file" hidden>
+    <div class="sheet-handle"></div>
+    <div class="menu-head">
+      <h2>Menú</h2>
+      <button class="icon-btn" data-action="close-menu" aria-label="Cerrar">✕</button>
     </div>
-    <div class="guest-only">
+    <div class="host-only">
+      <section class="menu-card">
+        <h3>👥 Amigos</h3>
+        <div id="lobby" class="lobby" hidden></div>
+        <div class="friends-list"></div>
+        <form class="friend-add join-row">
+          <input type="text" maxlength="20" autocomplete="off" placeholder="Apodo de tu amigo" aria-label="Apodo de tu amigo">
+          <button class="btn" type="submit">Añadir</button>
+        </form>
+      </section>
+
+      <section class="menu-card">
+        <h3>🌐 Multijugador online</h3>
+        <div id="mp-host">
+          <button class="btn primary mp-option" data-action="host-link">
+            <span>🔗 Jugar juntos <small>cada uno con su partida</small></span>
+          </button>
+          <p class="hint">Como el cable link de la GBA (multijugador de Quetzal, combates, intercambios). Lo más fácil es pulsar <b>Invitar</b> en tu lista de amigos; esto crea una sala con código por si tu amigo aún no está en tu lista.</p>
+          <button class="btn mp-option" data-action="host-screen">
+            <span>📺 Compartir mi pantalla <small>una sola partida</small></span>
+          </button>
+          <p class="hint">Tu amigo ve tu juego en directo y puede usar los botones. No necesita la ROM.</p>
+          <form id="menu-join" class="join-row">
+            <input id="menu-join-code" type="text" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="CÓDIGO" aria-label="Código de un amigo">
+            <button class="btn" type="submit">Unirme</button>
+          </form>
+        </div>
+        <div id="mp-session" hidden>
+          <p id="mp-mode"></p>
+          <div id="mp-code-box">
+            <p>Código de la sala:</p>
+            <div class="code" id="mp-code">------</div>
+            <div class="grid">
+              <button class="btn primary" data-action="share">📤 Enviar invitación</button>
+              <button class="btn" data-action="copy">📋 Copiar enlace</button>
+            </div>
+          </div>
+          <p id="mp-players"></p>
+          <label class="toggle" id="guest-control-row"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
+          <button class="btn danger" data-action="stop-net">Terminar multijugador</button>
+        </div>
+      </section>
+
+      <section class="menu-card">
+        <h3>✨ Gráficos</h3>
+        <div class="shaders" id="shaders">
+          <button class="shader-btn" data-shader="pixel"><span class="sw sw-pixel"></span>Original<small>Píxeles nítidos</small></button>
+          <button class="shader-btn" data-shader="hd"><span class="sw sw-hd"></span>HD<small>Bordes suaves</small></button>
+          <button class="shader-btn" data-shader="lcd"><span class="sw sw-lcd"></span>LCD<small>Pantalla GBA</small></button>
+          <button class="shader-btn" data-shader="crt"><span class="sw sw-crt"></span>CRT<small>Tele antigua</small></button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="color-correct"> Colores de la GBA original</label>
+      </section>
+
+      <section class="menu-card">
+        <h3>⏩ Velocidad <small id="speed-note"></small></h3>
+        <div class="speeds" id="speeds">
+          <button class="btn" data-speed="1">x1</button>
+          <button class="btn" data-speed="2">x2</button>
+          <button class="btn" data-speed="3">x3</button>
+          <button class="btn" data-speed="4">x4</button>
+          <button class="btn" data-speed="8">x8</button>
+        </div>
+      </section>
+
+      <section class="menu-card">
+        <h3>💾 Guardado rápido</h3>
+        <div class="slots" id="slots"></div>
+      </section>
+
+      <section class="menu-card">
+        <h3>⚙️ Opciones</h3>
+        <div class="grid">
+          <button class="btn" data-action="mute">🔊 Sonido</button>
+          <button class="btn" data-action="restart">🔄 Reiniciar</button>
+          <button class="btn" data-action="export-save">💾 Exportar .sav</button>
+          <button class="btn" data-action="import-save">📂 Importar .sav</button>
+          <button class="btn" data-action="fullscreen">⛶ Pantalla completa</button>
+          <button class="btn" data-action="toggle-pad">🎮 Ocultar mando</button>
+        </div>
+        <input id="sav-input" type="file" hidden>
+      </section>
+    </div>
+    <div class="guest-only menu-card">
       <p>Estás jugando en la partida de tu amigo. El juego, el sonido y las partidas guardadas los controla quien invitó.</p>
       <button class="btn" data-action="unmute-remote">🔊 Activar sonido</button>
     </div>
-    <div class="grid">
+    <div class="grid menu-foot">
       <button class="btn danger" data-action="quit">⏏ Salir</button>
-      <button class="btn primary" data-action="close-menu">Volver al juego</button>
+      <button class="btn primary" data-action="close-menu">▶ Volver al juego</button>
     </div>
   </div>
 </div>
@@ -231,6 +262,7 @@
 
 <script src="vendor/peerjs/peerjs.min.js"></script>
 <script src="vendor/fflate/fflate.min.js"></script>
+<script src="renderer.js"></script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
