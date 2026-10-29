@@ -595,6 +595,135 @@ function setPadHidden(hidden) {
   saveSetting("gbaweb-pad-hidden", hidden ? "1" : "0");
 }
 
+/* ---------- Personalizar: diseño de la consola y fondo ---------- */
+
+const SKINS = [
+  { id: "morado", name: "Medianoche", shell: "linear-gradient(180deg,#2a2450,#17132e)", key: "#3a3466", a: "#8f74ff", b: "#8f74ff" },
+  { id: "dmg", name: "Gris clásico", shell: "linear-gradient(#dcdad3,#bdbab1)", key: "#34343b", a: "#b02a5c", b: "#b02a5c" },
+  { id: "atomic", name: "Morado transparente", shell: "linear-gradient(160deg,#7b4fe0,#2c1670)", key: "#4a2fa8", a: "#a68bff", b: "#a68bff" },
+  { id: "plata", name: "Plata", shell: "linear-gradient(115deg,#eef1f5,#c3c9d2 40%,#a9b1bc)", key: "#2a2e35", a: "#2c3038", b: "#2c3038" },
+  { id: "retro8", name: "Retro 8 bits", shell: "linear-gradient(180deg,#c8c4bc 0 46%,#2a2a2a 46% 50%,#d9d5cd 50%)", key: "#1a1a1a", a: "#d7192f", b: "#d7192f" },
+  { id: "retro16", name: "Retro 16 bits", shell: "linear-gradient(#d6d6de,#b6b6c2)", key: "#4a4a55", a: "#e0322f", b: "#f2c014" },
+  { id: "electrico", name: "Amarillo eléctrico", shell: "linear-gradient(#ffd84a,#f4b000)", key: "#2a2a2a", a: "#e8402f", b: "#e8402f" },
+  { id: "neon", name: "Neón", shell: "#07060f", key: "#00e5ff", a: "#ff2bd6", b: "#00d5f0" },
+  { id: "negro", name: "Negro mate", shell: "linear-gradient(#1e1e20,#0c0c0d)", key: "#2c2c30", a: "#3a3a40", b: "#3a3a40" },
+];
+
+const BACKGROUNDS = [
+  { id: "", name: "Ninguno", css: "" },
+  { id: "atardecer", name: "Atardecer", css: "radial-gradient(60% 40% at 50% 70%,#ffd27a88,transparent 70%),linear-gradient(180deg,#ff9a5a,#ff5e7e 45%,#5b2a86)" },
+  { id: "oceano", name: "Océano", css: "radial-gradient(80% 60% at 50% 0%,#5fd3ff,transparent 60%),linear-gradient(180deg,#0a6fb5,#062a5a)" },
+  { id: "bosque", name: "Bosque", css: "radial-gradient(70% 50% at 30% 20%,#9be36d66,transparent 60%),linear-gradient(180deg,#2f7d3a,#0f2d17)" },
+  { id: "galaxia", name: "Galaxia", css: "radial-gradient(1.5px 1.5px at 20% 30%,#fff,transparent),radial-gradient(1px 1px at 70% 15%,#fff,transparent),radial-gradient(1.5px 1.5px at 85% 60%,#fff,transparent),radial-gradient(1px 1px at 35% 75%,#fff,transparent),radial-gradient(1px 1px at 55% 45%,#fff,transparent),radial-gradient(60% 50% at 70% 30%,#b23cff55,transparent 70%),radial-gradient(50% 40% at 20% 80%,#3c7bff55,transparent 70%),#05030f" },
+  { id: "foto", name: "Tu foto", css: "" },
+];
+
+const look = {
+  skin: lsGet("gbaweb-skin") || "morado",
+  bg: lsGet("gbaweb-bg"),
+  photoUrl: "",
+};
+
+async function applyLook() {
+  document.body.dataset.skin = look.skin;
+  let image = "";
+  if (look.bg === "foto") {
+    if (!look.photoUrl) {
+      const blob = await safeGet("files", "bg-photo");
+      if (blob) look.photoUrl = URL.createObjectURL(blob);
+    }
+    if (look.photoUrl) image = `url("${look.photoUrl}")`;
+  } else {
+    const preset = BACKGROUNDS.find((b) => b.id === look.bg);
+    image = preset ? preset.css : "";
+  }
+  document.body.classList.toggle("has-bg", !!image);
+  if (image) document.body.style.setProperty("--bg-image", image);
+  else document.body.style.removeProperty("--bg-image");
+  renderLook();
+}
+
+function renderLook() {
+  const skins = $("#skins");
+  skins.innerHTML = "";
+  for (const sk of SKINS) {
+    const btn = document.createElement("button");
+    btn.className = "skin-btn" + (sk.id === look.skin ? " active" : "");
+    btn.dataset.skin = sk.id;
+    btn.innerHTML = '<span class="skin-prev"><b></b><i class="a"></i><i class="b"></i></span><span></span>';
+    const prev = btn.firstChild;
+    prev.style.setProperty("--p-shell", sk.shell);
+    prev.style.setProperty("--p-key", sk.key);
+    prev.style.setProperty("--p-a", sk.a);
+    prev.style.setProperty("--p-b", sk.b);
+    btn.lastChild.textContent = sk.name;
+    skins.appendChild(btn);
+  }
+  const bgs = $("#bgs");
+  bgs.innerHTML = "";
+  for (const bg of BACKGROUNDS) {
+    const btn = document.createElement("button");
+    btn.className = "bg-btn" + ((look.bg || "") === bg.id ? " active" : "");
+    btn.dataset.bg = bg.id;
+    btn.innerHTML = '<span class="bg-prev"></span><span></span>';
+    const prev = btn.firstChild;
+    if (bg.css) prev.style.setProperty("--p-bg", bg.css);
+    else if (bg.id === "foto" && look.photoUrl) prev.style.setProperty("--p-bg", `url("${look.photoUrl}")`);
+    else prev.textContent = bg.id === "foto" ? "📷" : "∅";
+    btn.lastChild.textContent = bg.name;
+    bgs.appendChild(btn);
+  }
+}
+
+$("#skins").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-skin]");
+  if (!btn) return;
+  look.skin = btn.dataset.skin;
+  saveSetting("gbaweb-skin", look.skin);
+  applyLook();
+});
+
+$("#bgs").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-bg]");
+  if (!btn) return;
+  if (btn.dataset.bg === "foto") return $("#bg-input").click();
+  look.bg = btn.dataset.bg;
+  saveSetting("gbaweb-bg", look.bg);
+  applyLook();
+});
+
+// Tu foto como fondo: se reduce (máx. 1600 px) para que ocupe poco.
+$("#bg-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = URL.createObjectURL(file);
+    });
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * scale);
+    c.height = Math.round(img.naturalHeight * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(img.src);
+    const blob = await new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.85));
+    await db.put("files", blob, "bg-photo");
+    if (look.photoUrl) URL.revokeObjectURL(look.photoUrl);
+    look.photoUrl = URL.createObjectURL(blob);
+    look.bg = "foto";
+    saveSetting("gbaweb-bg", "foto");
+    applyLook();
+    toast("Fondo actualizado");
+  } catch (err) {
+    console.error(err);
+    toast("No se pudo usar esa imagen");
+  }
+});
+
 /* ---------- Menú ---------- */
 
 function openMenu() {
@@ -1513,6 +1642,7 @@ loadLibrary();
 renderBios();
 applyGraphics();
 setPadHidden(lsGet("gbaweb-pad-hidden") === "1");
+applyLook();
 render();
 friends.start();
 // Invitación aceptada desde otro juego: se recargó la página para abrir el correcto.
