@@ -341,6 +341,7 @@ async function startGame(file, record) {
     updateRom(libraryName, { lastPlayed: Date.now() });
     const bios = await safeGet("files", "bios");
     engine = await GbaEngine.create(CORE_URL, $("#game"));
+    applyGraphics();
     if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
     const saved = await safeGet("saves", romName);
     if (saved) engine.setSave(saved);
@@ -367,11 +368,8 @@ function saveCover(force) {
   lastCover = Date.now();
   try {
     // No guardar pantallas negras (cargas, transiciones).
-    const px = $("#game").getContext("2d").getImageData(0, 0, 240, 160).data;
-    let sum = 0;
-    for (let i = 0; i < px.length; i += 64) sum += px[i] + px[i + 1] + px[i + 2];
-    if (sum / (px.length / 64) < 30) return;
-    updateRom(libraryName, { cover: $("#game").toDataURL("image/jpeg", 0.85) });
+    if (engine.brightness() < 10) return;
+    updateRom(libraryName, { cover: engine.snapshot().toDataURL("image/jpeg", 0.85) });
   } catch (e) { /* lienzo no disponible */ }
 }
 
@@ -556,6 +554,47 @@ $("#speeds").addEventListener("click", (e) => {
   toast(chosenSpeed === 1 ? "Velocidad normal" : "Velocidad x" + chosenSpeed);
 });
 
+/* ---------- Gráficos y mando ---------- */
+
+const graphics = {
+  shader: lsGet("gbaweb-shader") || "pixel",
+  colors: lsGet("gbaweb-colors") === "1",
+};
+
+function applyGraphics() {
+  if (engine) {
+    engine.renderer.setShader(graphics.shader);
+    engine.renderer.setColorCorrection(graphics.colors);
+  }
+  for (const b of document.querySelectorAll("[data-shader]")) b.classList.toggle("active", b.dataset.shader === graphics.shader);
+  $("#color-correct").checked = graphics.colors;
+}
+
+function saveSetting(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* sin almacenamiento */ }
+}
+
+$("#shaders").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-shader]");
+  if (!btn) return;
+  graphics.shader = btn.dataset.shader;
+  saveSetting("gbaweb-shader", graphics.shader);
+  applyGraphics();
+  if (engine && !engine.renderer.webgl) toast("Tu navegador no permite filtros gráficos (WebGL)");
+});
+
+$("#color-correct").addEventListener("change", (e) => {
+  graphics.colors = e.target.checked;
+  saveSetting("gbaweb-colors", graphics.colors ? "1" : "0");
+  applyGraphics();
+});
+
+function setPadHidden(hidden) {
+  document.body.classList.toggle("pad-hidden", hidden);
+  $("[data-action=toggle-pad]").textContent = hidden ? "🎮 Mostrar mando" : "🎮 Ocultar mando";
+  saveSetting("gbaweb-pad-hidden", hidden ? "1" : "0");
+}
+
 /* ---------- Menú ---------- */
 
 function openMenu() {
@@ -655,6 +694,10 @@ const actions = {
   "host-link": () => net.host("link"),
   "host-screen": () => net.host("screen"),
   "stop-net": () => net.stop(),
+  "toggle-pad": () => {
+    setPadHidden(!document.body.classList.contains("pad-hidden"));
+    closeMenu();
+  },
   share: () => {
     const url = net.inviteUrl();
     const text = net.mode === "link"
@@ -1381,7 +1424,7 @@ function renderFriends() {
   for (const list of document.querySelectorAll(".friends-list")) {
     list.innerHTML = "";
     if (!friends.list.length) {
-      list.innerHTML = '<p class="hint">Añade a tu amigo con su apodo. Él tiene que añadirte a ti con el tuyo (o aceptarte cuando te vea).</p>';
+      list.innerHTML = '<p class="hint">Añade a tu amigo con su apodo: a él le aparecerás en su lista automáticamente.</p>';
       continue;
     }
     const sorted = [...friends.list].sort((a, b) => friends.conns.has(b.id) - friends.conns.has(a.id));
@@ -1468,6 +1511,8 @@ document.addEventListener("visibilitychange", () => {
 
 loadLibrary();
 renderBios();
+applyGraphics();
+setPadHidden(lsGet("gbaweb-pad-hidden") === "1");
 render();
 friends.start();
 // Invitación aceptada desde otro juego: se recargó la página para abrir el correcto.

@@ -10,7 +10,10 @@ Incluye **multijugador online** para jugar con un amigo.
   compilado a WebAssembly. Funciona en Safari sin instalar nada.
 - Mando táctil tipo Game Boy: cruceta con diagonales, A, B, L, R, START, SELECT y botón
   de avance rápido ⏩ (mantener pulsado). Se puede deslizar el dedo entre botones.
-- Vista vertical y horizontal.
+- Pantalla lo más grande posible: de borde a borde en vertical y a toda la altura en horizontal.
+  Opción **Ocultar mando** para jugar solo con la pantalla (por ejemplo, con un mando Bluetooth).
+- **Gráficos (WebGL)**: filtros *Original* (píxeles nítidos), *HD* (bordes suaves, Scale2x ×2),
+  *LCD* (rejilla de la pantalla de la GBA) y *CRT* (tele antigua), más la opción *Colores de la GBA original*.
 - **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
 - **3 ranuras de guardado rápido** (save states), silenciar, reiniciar.
 - **Velocidad x1, x2, x3, x4 y x8** desde el menú, o manteniendo ⏩ (x4). Se desactiva en multijugador.
@@ -89,8 +92,8 @@ Para probarlo en local: `cd site && python3 -m http.server 8000` y abre http://l
 
 ## Cómo está hecho
 
-- `site/` — la web estática (HTML/CSS/JS). `engine.js` ejecuta el núcleo; `app.js` es la interfaz
-  y el multijugador.
+- `site/` — la web estática (HTML/CSS/JS). `engine.js` ejecuta el núcleo, `renderer.js` dibuja la
+  pantalla con WebGL y los filtros, y `app.js` es la interfaz y el multijugador.
 - `site/gpsp/gpsp.wasm` — gpSP compilado a WebAssembly con `wasm/build.sh` (clang + wasm-ld,
   sin Emscripten). `wasm/frontend.c` es un frontend libretro mínimo que expone vídeo, audio,
   mandos y la interfaz *netpacket* de red; `wasm/shim.c` es una pequeña biblioteca C.

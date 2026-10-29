@@ -11,9 +11,18 @@ class GbaEngine {
 
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx2d = canvas.getContext("2d");
-    this.image = this.ctx2d.createImageData(240, 160);
-    this.pixels = new Uint32Array(this.image.data.buffer);
+    try {
+      this.renderer = new GbaRenderer(canvas);
+    } catch (e) {
+      // Si los filtros no funcionan en este dispositivo, se dibuja sin ellos en un lienzo nuevo.
+      console.warn("WebGL no disponible, se usa el dibujo 2D", e);
+      const fresh = canvas.cloneNode();
+      canvas.replaceWith(fresh);
+      this.canvas = fresh;
+      this.renderer = new GbaRenderer(fresh, true);
+    }
+    this.rgba = new Uint8ClampedArray(240 * 160 * 4);
+    this.pixels = new Uint32Array(this.rgba.buffer);
     this.palette = new Uint32Array(65536);
     for (let c = 0; c < 65536; c++) {
       const r = ((c >> 11) & 31) * 255 / 31, g = ((c >> 5) & 63) * 255 / 63, b = (c & 31) * 255 / 31;
@@ -126,7 +135,22 @@ class GbaEngine {
     const fb = new Uint16Array(this.ex.memory.buffer, this.ex.fe_framebuffer(), 240 * 160);
     const pal = this.palette, px = this.pixels;
     for (let i = 0; i < 38400; i++) px[i] = pal[fb[i]];
-    this.ctx2d.putImageData(this.image, 0, 0);
+    this.renderer.draw(this.rgba);
+  }
+
+  // Captura sin filtros (para las portadas de la biblioteca).
+  snapshot() {
+    const c = this.snapCanvas || (this.snapCanvas = Object.assign(document.createElement("canvas"), { width: 240, height: 160 }));
+    const ctx = c.getContext("2d");
+    ctx.putImageData(new ImageData(this.rgba.slice(), 240, 160), 0, 0);
+    return c;
+  }
+
+  // Brillo medio de la imagen (0–255): sirve para no guardar pantallas negras.
+  brightness() {
+    let sum = 0;
+    for (let i = 0; i < this.rgba.length; i += 64) sum += this.rgba[i] + this.rgba[i + 1] + this.rgba[i + 2];
+    return sum / (this.rgba.length / 64) / 3;
   }
 
   /* ---------- Sonido ---------- */
