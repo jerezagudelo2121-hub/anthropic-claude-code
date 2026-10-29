@@ -14,6 +14,9 @@ Incluye **multijugador online** para jugar con un amigo.
   Opción **Ocultar mando** para jugar solo con la pantalla (por ejemplo, con un mando Bluetooth).
 - **Gráficos (WebGL)**: filtros *Original* (píxeles nítidos), *HD* (bordes suaves, Scale2x ×2),
   *LCD* (rejilla de la pantalla de la GBA) y *CRT* (tele antigua), más la opción *Colores de la GBA original*.
+- **Personalizar**: 9 diseños de consola (Medianoche, Gris clásico, Morado transparente, Plata,
+  Retro 8 bits, Retro 16 bits, Amarillo eléctrico, Neón y Negro mate) y fondos (Atardecer, Océano,
+  Bosque, Galaxia o **tu propia foto**).
 - **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
 - **3 ranuras de guardado rápido** (save states), silenciar, reiniciar.
 - **Velocidad x1, x2, x3, x4 y x8** desde el menú, o manteniendo ⏩ (x4). Se desactiva en multijugador.
