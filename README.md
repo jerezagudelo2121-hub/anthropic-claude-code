@@ -34,6 +34,16 @@ Incluye **multijugador online** para jugar con un amigo.
 3. Pulsa **Añadir juegos** y elige tus archivos `.gba` (o `.zip`) desde la app Archivos.
 4. Toca un juego de tu biblioteca para jugar.
 
+## Cómo jugar en Android
+
+1. Abre la página en **Chrome**.
+2. Pulsa **📲 Instalar como app** (o menú **⋮ → Instalar aplicación**). Queda con su icono en el móvil.
+3. Añade tus juegos y toca uno para jugar.
+
+En Android además: **vibración** al pulsar los botones (se puede quitar en ☰ → Opciones), el
+**botón atrás** abre/cierra el menú sin salir del juego, **pantalla completa** que oculta las barras
+de Android, **🔄 Girar pantalla**, y la web **funciona sin internet** para jugar solo (service worker).
+
 ## Multijugador con un amigo
 
 Menú **☰ → Multijugador online**. Hay dos modos:

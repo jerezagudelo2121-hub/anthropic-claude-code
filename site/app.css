@@ -222,7 +222,8 @@ code { font-size: .92em; }
 }
 .pad .on { transform: translateY(2px) scale(.97); filter: brightness(1.25); box-shadow: inset 0 1px 0 #ffffff26, 0 1px 0 var(--key-lo), 0 2px 6px #0006; }
 
-.shoulder { top: 12px; width: 30%; max-width: 150px; height: 44px; font-size: 18px; }
+/* En móviles altos los gatillos bajan para quedar cerca de la cruceta. */
+.shoulder { top: max(12px, calc(50% - 170px)); width: 30%; max-width: 150px; height: 44px; font-size: 18px; }
 .shoulder.l { left: 12px; border-radius: 26px 10px 10px 10px; }
 .shoulder.r { right: 12px; border-radius: 10px 26px 10px 10px; }
 
@@ -274,7 +275,7 @@ code { font-size: .92em; }
 
 .meta { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 22px; }
 .meta .pill { position: static; width: 78px; height: 26px; border-radius: 13px; font-size: 10px; letter-spacing: 1.5px; }
-.turbo { left: 50%; top: 12px; transform: translateX(-50%); min-width: 54px; height: 44px; padding: 0 10px; border-radius: 14px; font-size: 15px; }
+.turbo { left: 50%; top: max(12px, calc(50% - 170px)); transform: translateX(-50%); min-width: 54px; height: 44px; padding: 0 10px; border-radius: 14px; font-size: 15px; }
 .pad .turbo.on { transform: translateX(-50%) translateY(2px) scale(.97); }
 .turbo.disabled { opacity: .35; }
 body.guest .turbo { display: none; }
@@ -507,3 +508,6 @@ body.has-bg { --console-bg: linear-gradient(180deg, #0000004d, #00000080), var(-
 .skin-prev b { position: absolute; left: 10%; right: 10%; top: 8%; height: 12%; border-radius: 3px; background: #0b0b14; }
 .bgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .bg-prev { width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; background: var(--p-bg) center / cover; box-shadow: inset 0 0 0 1px #ffffff1a; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+
+/* Botón de instalar (Android) */
+.install-btn { background: linear-gradient(180deg, #ffd46a, #f0b429); color: #2a1d00; box-shadow: inset 0 1px 0 #fff8, 0 6px 22px #f6c44355; }

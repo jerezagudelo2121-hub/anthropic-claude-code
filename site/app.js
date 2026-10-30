@@ -89,6 +89,7 @@ function setNetStatus(text, kind) {
 
 function showView(id) {
   document.querySelectorAll(".view").forEach((v) => (v.hidden = v.id !== id));
+  if (id === "console") trapBack();
 }
 
 function baseName(name) {
@@ -441,7 +442,12 @@ function updatePressed(points) {
   const next = new Set();
   for (const p of points) hitTest(p.x, p.y, p.zone, next);
   for (const name of pressedNow) if (!next.has(name)) (arms[name] || padButtons[name]).classList.remove("on");
-  for (const name of next) if (!pressedNow.has(name)) (arms[name] || padButtons[name]).classList.add("on");
+  let newPress = false;
+  for (const name of next) if (!pressedNow.has(name)) {
+    (arms[name] || padButtons[name]).classList.add("on");
+    newPress = true;
+  }
+  if (newPress) haptic();
   pressedNow = next;
   touchMask = 0;
   for (const name of next) if (name in BUTTONS) touchMask |= 1 << BUTTONS[name];
@@ -815,10 +821,29 @@ const actions = {
     $("#sav-input").click();
   },
   fullscreen: () => {
+    closeMenu();
+    if (document.fullscreenElement) return document.exitFullscreen();
     const el = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (req) req.call(el);
+    if (req) Promise.resolve(req.call(el, { navigationUI: "hide" })).catch(() => {});
     else toast("En iPhone: Compartir → Añadir a pantalla de inicio");
+  },
+  "toggle-vibration": () => {
+    android.vibration = !android.vibration;
+    saveSetting("gbaweb-vibration", android.vibration ? "1" : "0");
+    renderAndroid();
+    if (android.vibration) navigator.vibrate(30);
+  },
+  rotate: async () => {
+    // Fija horizontal/vertical (Android, en pantalla completa).
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+      const landscape = screen.orientation.type.startsWith("portrait");
+      await screen.orientation.lock(landscape ? "landscape" : "portrait");
+      closeMenu();
+    } catch (e) {
+      toast("Tu móvil no permite girar desde aquí; gira el móvil directamente");
+    }
   },
   "host-link": () => net.host("link"),
   "host-screen": () => net.host("screen"),
@@ -1636,10 +1661,69 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") friends.probe();
 });
 
+/* ---------- Android: instalar como app, vibración y botón atrás ---------- */
+
+const android = {
+  canVibrate: typeof navigator.vibrate === "function",
+  vibration: lsGet("gbaweb-vibration") !== "0",
+  installPrompt: null,
+};
+
+function haptic() {
+  if (android.canVibrate && android.vibration) navigator.vibrate(12);
+}
+
+function renderAndroid() {
+  const vib = $("[data-action=toggle-vibration]");
+  vib.hidden = !android.canVibrate;
+  vib.textContent = android.vibration ? "📳 Vibración: sí" : "📴 Vibración: no";
+  $("[data-action=rotate]").hidden = !(screen.orientation && screen.orientation.lock);
+}
+
+// Chrome (Android) avisa cuando la web se puede instalar: se muestra el botón.
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  android.installPrompt = e;
+  $("#install-btn").hidden = false;
+});
+window.addEventListener("appinstalled", () => {
+  $("#install-btn").hidden = true;
+  toast("¡Instalada! Ya la tienes en tu pantalla de inicio.", 4000);
+});
+$("#install-btn").addEventListener("click", async () => {
+  const prompt = android.installPrompt;
+  if (!prompt) return;
+  android.installPrompt = null;
+  prompt.prompt();
+  await prompt.userChoice.catch(() => {});
+  $("#install-btn").hidden = true;
+});
+
+// Botón "atrás" de Android: dentro del juego abre o cierra el menú en vez de salir.
+function trapBack() {
+  if (!history.state || !history.state.gba) history.pushState({ gba: 1 }, "");
+}
+window.addEventListener("popstate", () => {
+  if ($("#console").hidden) return;
+  const open = ["#invite-modal", "#game-sheet", "#menu"].map((id) => $(id)).find((el) => !el.hidden);
+  if (open) {
+    if (open.id === "invite-modal") friends.answerInvite(false);
+    else open.hidden = true;
+  } else {
+    openMenu();
+  }
+  trapBack();
+});
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Sin modo sin conexión", e));
+}
+
 /* ---------- Inicio ---------- */
 
 loadLibrary();
 renderBios();
+renderAndroid();
 applyGraphics();
 setPadHidden(lsGet("gbaweb-pad-hidden") === "1");
 applyLook();
