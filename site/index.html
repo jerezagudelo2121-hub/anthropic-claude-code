@@ -6,6 +6,7 @@
 <title>GBA Web</title>
 <meta name="description" content="Emulador de Game Boy Advance en el navegador, con multijugador online.">
 <meta name="theme-color" content="#120f24">
+<meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,6 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -24,6 +26,8 @@
     <p class="tagline">Emulador de Game Boy Advance en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
 
     <div id="invite-banner" class="banner" hidden></div>
+
+    <button id="install-btn" class="btn primary big install-btn" hidden>📲 Instalar como app</button>
 
     <section class="profile">
       <form id="nick-form" class="nick-form">
@@ -85,8 +89,10 @@
     </form>
 
     <details class="help">
-      <summary>¿Cómo instalarlo en el iPhone?</summary>
-      <p>En Safari pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>. Se abrirá a pantalla completa, como una app.</p>
+      <summary>¿Cómo instalarlo como app?</summary>
+      <p><b>iPhone:</b> en Safari pulsa <b>Compartir</b> → <b>Añadir a pantalla de inicio</b>.</p>
+      <p><b>Android:</b> pulsa <b>📲 Instalar como app</b> (o en Chrome: menú <b>⋮</b> → <b>Instalar aplicación</b>).</p>
+      <p>Se abrirá a pantalla completa, como una app, y funciona sin internet para jugar solo.</p>
       <p>Las partidas guardadas se quedan en tu iPhone (dentro del navegador). Tus ROMs nunca se suben a internet.</p>
     </details>
   </div>
@@ -223,6 +229,8 @@
           <button class="btn" data-action="import-save">📂 Importar .sav</button>
           <button class="btn" data-action="fullscreen">⛶ Pantalla completa</button>
           <button class="btn" data-action="toggle-pad">🎮 Ocultar mando</button>
+          <button class="btn" data-action="toggle-vibration" hidden>📳 Vibración: sí</button>
+          <button class="btn" data-action="rotate" hidden>🔄 Girar pantalla</button>
         </div>
         <input id="sav-input" type="file" hidden>
       </section>
