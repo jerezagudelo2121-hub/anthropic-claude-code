@@ -27,6 +27,20 @@ Incluye **multijugador online** para jugar con un amigo.
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.
 
+## 🌐 Juego incluido: Pixelterra
+
+En la pantalla de inicio, **🌐 Juegos web → Pixelterra** (`site/juegos/pixelterra/`): un juego
+original para el navegador, inspirado en la idea de mezclar mundos de bloques con criaturas
+coleccionables, con criaturas, nombres y gráficos propios (todo dibujado con código).
+
+- Mundo generado (isla con playa, bosque, hierba alta y montañas con carbón, hierro y gemas).
+- **A**: talar, picar, cortar hierba (bayas), usar el banco o la hoguera. **B**: poner bloques.
+- **Fabricar**: tablas, palos, banco de trabajo, picos de madera/piedra/hierro, cubos, supercubos,
+  hogueras, ladrillos y pociones.
+- **12 criaturas** de 6 tipos, combates por turnos con eficacias, experiencia y niveles, captura
+  con cubos, equipo de 6 y caja.
+- Día y noche (de noche aparecen criaturas distintas y las hogueras iluminan). Guardado automático.
+
 ## Cómo jugar en el iPhone
 
 1. Abre la página en **Safari**.

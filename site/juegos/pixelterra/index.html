@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Pixelterra</title>
+<meta name="description" content="Explora un mundo de bloques, fabrica herramientas y captura criaturas. Juego original para el navegador.">
+<meta name="theme-color" content="#0e1a12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="world"></canvas>
+
+<!-- Barra superior -->
+<header class="hud-top">
+  <a class="hbtn" href="../../" aria-label="Volver al emulador">⟵</a>
+  <div class="clock" id="clock">☀️ Día 1</div>
+  <button class="hbtn" data-open="team" aria-label="Equipo">🐾</button>
+  <button class="hbtn" data-open="bag" aria-label="Mochila">🎒</button>
+  <button class="hbtn" data-open="craft" aria-label="Fabricar">🛠️</button>
+</header>
+
+<!-- Objeto en la mano -->
+<div class="hotbar" id="hotbar"></div>
+
+<!-- Mando táctil -->
+<div class="controls" id="controls">
+  <div class="dpad" id="dpad">
+    <div class="arm up"></div><div class="arm down"></div><div class="arm left"></div><div class="arm right"></div>
+  </div>
+  <div class="actions">
+    <button class="act b" id="btn-b"><span>B</span><small>Poner</small></button>
+    <button class="act a" id="btn-a"><span>A</span><small>Usar</small></button>
+  </div>
+</div>
+
+<!-- Mensajes -->
+<div class="toast" id="toast" hidden></div>
+
+<!-- Paneles: mochila, fabricar, equipo -->
+<div class="panel" id="panel" hidden>
+  <div class="panel-body">
+    <div class="panel-head">
+      <h2 id="panel-title"></h2>
+      <button class="hbtn" id="panel-close" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="panel-content"></div>
+  </div>
+</div>
+
+<!-- Combate -->
+<div class="battle" id="battle" hidden>
+  <div class="arena">
+    <div class="foe">
+      <div class="card" id="foe-card"></div>
+      <canvas class="mon" id="foe-sprite" width="48" height="48"></canvas>
+    </div>
+    <div class="ally">
+      <canvas class="mon" id="ally-sprite" width="48" height="48"></canvas>
+      <div class="card" id="ally-card"></div>
+    </div>
+  </div>
+  <div class="battle-box">
+    <p id="battle-msg"></p>
+    <div class="battle-menu" id="battle-menu"></div>
+  </div>
+</div>
+
+<!-- Inicio: elegir criatura -->
+<div class="intro" id="intro" hidden>
+  <div class="intro-body">
+    <h1>Pixelterra</h1>
+    <p>Un mundo de bloques lleno de criaturas. Tala, pica, fabrica herramientas y forma tu equipo.</p>
+    <h3>Elige tu primera criatura</h3>
+    <div class="starters" id="starters"></div>
+    <details class="howto">
+      <summary>¿Cómo se juega?</summary>
+      <ul>
+        <li><b>Cruceta</b>: caminar. <b>A</b>: usar lo que tienes delante (talar, picar, hoguera…). <b>B</b>: poner el bloque que llevas en la mano.</li>
+        <li>En la <b>hierba alta</b> aparecen criaturas. Debilítalas y lánzales un <b>cubo</b> para capturarlas.</li>
+        <li><b>🛠️ Fabricar</b>: tablas, palos, picos, cubos, hogueras… Algunas recetas necesitan estar junto a un <b>banco de trabajo</b>.</li>
+        <li>Usa una <b>hoguera</b> (A) para curar a tu equipo y guardar el punto de regreso.</li>
+        <li>De noche salen criaturas distintas y más fuertes. La partida se guarda sola.</li>
+      </ul>
+    </details>
+    <a class="back-link" href="../../">⟵ Volver al emulador</a>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

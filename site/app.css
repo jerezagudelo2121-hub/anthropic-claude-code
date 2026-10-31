@@ -511,3 +511,17 @@ body.has-bg { --console-bg: linear-gradient(180deg, #0000004d, #00000080), var(-
 
 /* Botón de instalar (Android) */
 .install-btn { background: linear-gradient(180deg, #ffd46a, #f0b429); color: #2a1d00; box-shadow: inset 0 1px 0 #fff8, 0 6px 22px #f6c44355; }
+
+/* ---------- Juegos web ---------- */
+.games { display: flex; flex-direction: column; gap: 10px; }
+.games h2 { margin: 0; font-size: 21px; }
+.game-link {
+  display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 20px; text-decoration: none; color: var(--text);
+  background: radial-gradient(80% 120% at 0% 0%, #3f8a3a, transparent 70%), linear-gradient(135deg, #1f4a26, #13261a);
+  border: 1px solid #6cd36b55; box-shadow: 0 10px 30px #0000004d;
+}
+.game-link:active { transform: scale(.98); }
+.game-link-art { font-size: 30px; flex: none; }
+.game-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.game-link-text small { color: #c9e6c6; font-size: 13px; }
+.game-link-go { flex: none; font-weight: 800; padding: 8px 12px; border-radius: 12px; background: #6cd36b; color: #08240c; }
