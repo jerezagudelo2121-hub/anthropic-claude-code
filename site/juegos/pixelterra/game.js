@@ -47,9 +47,122 @@ function valueNoise(seed) {
   };
 }
 
+/* ---------- Sonido: efectos y música sintetizados (WebAudio, sin archivos) ---------- */
+
+const snd = {
+  ctx: null, master: null, music: null,
+  sfxOn: localStorage.getItem("pixelterra-sfx") !== "0",
+  musicOn: localStorage.getItem("pixelterra-music") !== "0",
+  theme: null, timer: null, beat: 0,
+};
+
+function audio() {
+  if (!snd.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    snd.ctx = new AC();
+    snd.master = snd.ctx.createGain();
+    snd.master.gain.value = 0.55;
+    snd.master.connect(snd.ctx.destination);
+    snd.music = snd.ctx.createGain();
+    snd.music.gain.value = snd.musicOn ? 0.22 : 0;
+    snd.music.connect(snd.master);
+  }
+  if (snd.ctx.state !== "running") snd.ctx.resume().catch(() => {});
+  return snd.ctx;
+}
+addEventListener("pointerdown", audio, true);
+addEventListener("keydown", audio, true);
+
+function tone(freq, dur, { type = "square", vol = 0.12, slide = 0, delay = 0, out = null } = {}) {
+  const c = snd.ctx;
+  if (!c || (!out && !snd.sfxOn)) return;
+  const t = c.currentTime + delay;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(out || snd.master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function noise(dur, { vol = 0.15, freq = 1200, delay = 0 } = {}) {
+  const c = snd.ctx;
+  if (!c || !snd.sfxOn) return;
+  const t = c.currentTime + delay;
+  const len = Math.floor(c.sampleRate * dur);
+  const buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(snd.master);
+  src.start(t);
+}
+
+const SFX = {
+  step: () => noise(0.06, { vol: 0.05, freq: 900 }),
+  rustle: () => noise(0.12, { vol: 0.09, freq: 2600 }),
+  hit: () => { noise(0.07, { vol: 0.18, freq: 700 }); tone(140, 0.08, { type: "triangle", vol: 0.15 }); },
+  break: () => { noise(0.22, { vol: 0.22, freq: 1100 }); tone(220, 0.18, { type: "square", vol: 0.07, slide: -150 }); },
+  pickup: () => { tone(660, 0.07, { vol: 0.08 }); tone(990, 0.09, { vol: 0.08, delay: 0.07 }); },
+  place: () => { noise(0.08, { vol: 0.18, freq: 500 }); tone(110, 0.1, { type: "triangle", vol: 0.15 }); },
+  craft: () => [523, 659, 784].forEach((f, i) => tone(f, 0.1, { vol: 0.08, delay: i * 0.06 })),
+  heal: () => [392, 523, 659, 784].forEach((f, i) => tone(f, 0.18, { type: "sine", vol: 0.12, delay: i * 0.09 })),
+  encounter: () => [220, 330, 440, 660, 880].forEach((f, i) => tone(f, 0.08, { vol: 0.09, delay: i * 0.05 })),
+  attack: () => { noise(0.1, { vol: 0.2, freq: 1800 }); tone(300, 0.15, { vol: 0.1, slide: -220 }); },
+  superHit: () => { noise(0.18, { vol: 0.28, freq: 2400 }); tone(500, 0.2, { vol: 0.12, slide: -400 }); },
+  faint: () => tone(440, 0.6, { type: "triangle", vol: 0.15, slide: -380 }),
+  shake: () => { tone(180, 0.05, { type: "triangle", vol: 0.18 }); noise(0.05, { vol: 0.12, freq: 600 }); },
+  caught: () => [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, 0.14, { vol: 0.1, delay: i * 0.11 })),
+  levelUp: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, { vol: 0.1, delay: i * 0.08 })),
+  quest: () => [659, 784, 988, 1319].forEach((f, i) => tone(f, 0.16, { type: "triangle", vol: 0.14, delay: i * 0.1 })),
+  deny: () => tone(150, 0.15, { vol: 0.08 }),
+  click: () => tone(880, 0.03, { vol: 0.05 }),
+};
+function sfx(name) { if (snd.ctx && snd.sfxOn && SFX[name]) SFX[name](); }
+
+// Música: melodías cortas en bucle (escala pentatónica), una para el mundo y otra para combatir.
+const THEMES = {
+  day: { bpm: 104, wave: "triangle", lead: [0, 2, 4, 7, 4, 2, 0, -3, 0, 2, 4, 9, 7, 4, 2, 4], bass: [-12, -12, -5, -5, -7, -7, -5, -5], root: 392 },
+  night: { bpm: 80, wave: "sine", lead: [0, -3, 0, 2, 0, -5, -3, 0, 4, 2, 0, -3, -5, -3, 0, -1], bass: [-15, -15, -10, -10, -12, -12, -8, -8], root: 330 },
+  battle: { bpm: 150, wave: "square", lead: [0, 0, 3, 0, 5, 3, 7, 5, 0, 0, 3, 0, 8, 7, 5, 3], bass: [-12, -12, -9, -9, -7, -7, -5, -5], root: 330 },
+  boss: { bpm: 160, wave: "sawtooth", lead: [0, 1, 0, 6, 0, 1, 0, 7, 0, 1, 0, 6, 5, 3, 1, 0], bass: [-12, -12, -11, -11, -12, -12, -6, -6], root: 294 },
+};
+const semis = (root, n) => root * Math.pow(2, n / 12);
+
+function playTheme(name) {
+  if (snd.theme === name) return;
+  snd.theme = name;
+  clearInterval(snd.timer);
+  snd.beat = 0;
+  const th = THEMES[name];
+  if (!th) return;
+  const stepMs = 60000 / th.bpm / 2;
+  snd.timer = setInterval(() => {
+    if (!snd.ctx || !snd.musicOn || document.hidden) return;
+    const i = snd.beat++ % th.lead.length;
+    const n = th.lead[i];
+    if (n !== null) tone(semis(th.root, n), stepMs / 1000 * 0.9, { type: th.wave, vol: name === "battle" || name === "boss" ? 0.05 : 0.07, out: snd.music });
+    if (i % 2 === 0) tone(semis(th.root, th.bass[(i / 2) % th.bass.length]), stepMs / 1000 * 1.8, { type: "triangle", vol: 0.09, out: snd.music });
+  }, stepMs);
+}
+
+function setMusic(on) {
+  snd.musicOn = on;
+  localStorage.setItem("pixelterra-music", on ? "1" : "0");
+  if (snd.music) snd.music.gain.value = on ? 0.22 : 0;
+}
+function setSfx(on) {
+  snd.sfxOn = on;
+  localStorage.setItem("pixelterra-sfx", on ? "1" : "0");
+}
+
 /* ---------- Datos del juego ---------- */
 
-const T = { WATER: 0, SAND: 1, GRASS: 2, TALL: 3, TREE: 4, STONE: 5, COAL: 6, IRON: 7, GEM: 8, FLOWER: 9, PLANKS: 10, BRICK: 11, BENCH: 12, FIRE: 13, DIRT: 14, DEEP: 15 };
+const T = { WATER: 0, SAND: 1, GRASS: 2, TALL: 3, TREE: 4, STONE: 5, COAL: 6, IRON: 7, GEM: 8, FLOWER: 9, PLANKS: 10, BRICK: 11, BENCH: 12, FIRE: 13, DIRT: 14, DEEP: 15, ALTAR: 16 };
 const WALKABLE = new Set([T.SAND, T.GRASS, T.TALL, T.FLOWER, T.DIRT]);
 
 // Qué se obtiene al romper cada bloque. tool: nivel de pico necesario (0 = a mano).
@@ -130,17 +243,19 @@ const MOVES = {
   trueno: { name: "Trueno", type: "electrico", pow: 80 },
   pedrada: { name: "Pedrada", type: "roca", pow: 45 },
   avalancha: { name: "Avalancha", type: "roca", pow: 80 },
+  magma: { name: "Puño de magma", type: "fuego", pow: 70 },
+  temblor: { name: "Temblor", type: "roca", pow: 90 },
 };
 
 /* Criaturas. art: operaciones de dibujo en una rejilla de 24×24 (se perfilan solas).
  *   ["e", cx, cy, rx, ry, color]  elipse      ["r", x, y, w, h, color]  rectángulo
  *   ["t", x1, y1, x2, y2, x3, y3, color]  triángulo   ["o", x, y, color]  ojo (1 píxel) */
 const SPECIES = {
-  brasito: { name: "Brasito", type: "fuego", base: { hp: 45, atk: 56, def: 42, spd: 55 }, learn: [[1, "placaje"], [1, "ascuas"], [14, "llamarada"]],
+  brasito: { name: "Brasito", type: "fuego", base: { hp: 45, atk: 56, def: 42, spd: 55 }, learn: [[1, "placaje"], [1, "ascuas"], [14, "llamarada"]], evo: { lvl: 16, to: "fogaro" },
     art: [["t", 3, 16, 7, 6, 9, 15, "#ffcc33"], ["e", 4, 8, 2, 3, "#ff5a1f"], ["e", 11, 15, 6, 5, "#ff8a3d"], ["e", 16, 10, 4, 4, "#ff8a3d"], ["e", 11, 17, 3, 2, "#ffd27a"], ["r", 7, 19, 3, 3, "#e0662a"], ["r", 13, 19, 3, 3, "#e0662a"], ["o", 17, 9, "#1b1b1b"], ["r", 18, 11, 2, 1, "#a8361a"]] },
-  gotin: { name: "Gotín", type: "agua", base: { hp: 52, atk: 46, def: 52, spd: 45 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]],
+  gotin: { name: "Gotín", type: "agua", base: { hp: 52, atk: 46, def: 52, spd: 45 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]], evo: { lvl: 16, to: "marejo" },
     art: [["t", 12, 2, 5, 13, 19, 13, "#5ab8ff"], ["e", 12, 15, 7, 6, "#5ab8ff"], ["e", 9, 12, 1, 2, "#d7f1ff"], ["o", 10, 15, "#123"], ["o", 14, 15, "#123"], ["r", 11, 18, 3, 1, "#2a5f99"]] },
-  brotin: { name: "Brotín", type: "planta", base: { hp: 50, atk: 48, def: 54, spd: 43 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]],
+  brotin: { name: "Brotín", type: "planta", base: { hp: 50, atk: 48, def: 54, spd: 43 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]], evo: { lvl: 16, to: "arbolon" },
     art: [["r", 11, 8, 2, 4, "#3fae46"], ["t", 12, 9, 4, 4, 9, 11, "#3fae46"], ["t", 12, 9, 20, 4, 15, 11, "#56c45a"], ["e", 12, 16, 6, 5, "#7fd36b"], ["o", 10, 15, "#132"], ["o", 14, 15, "#132"], ["r", 8, 17, 1, 1, "#ff9aa2"], ["r", 16, 17, 1, 1, "#ff9aa2"]] },
   plumi: { name: "Plumi", type: "normal", base: { hp: 40, atk: 46, def: 36, spd: 70 }, learn: [[1, "picotazo"], [6, "aranazo"]],
     art: [["t", 11, 7, 13, 3, 14, 8, "#e74c3c"], ["e", 12, 14, 6, 6, "#f2efe6"], ["e", 8, 15, 3, 4, "#d8d2c2"], ["t", 17, 12, 21, 13, 17, 14, "#ffb02e"], ["o", 15, 12, "#1b1b1b"], ["r", 10, 20, 1, 2, "#ffb02e"], ["r", 13, 20, 1, 2, "#ffb02e"]] },
@@ -161,6 +276,18 @@ const SPECIES = {
   voltibicho: { name: "Voltibicho", type: "electrico", base: { hp: 46, atk: 54, def: 48, spd: 56 }, learn: [[1, "placaje"], [5, "chispa"], [18, "trueno"]], night: true,
     art: [["t", 12, 3, 10, 10, 14, 10, "#ffe14a"], ["e", 12, 15, 7, 5, "#3d4bd9"], ["r", 12, 10, 1, 10, "#1f2a8a"], ["e", 9, 14, 1, 1, "#ffe14a"], ["e", 15, 16, 1, 1, "#ffe14a"], ["r", 6, 19, 2, 2, "#1f2a8a"], ["r", 16, 19, 2, 2, "#1f2a8a"], ["o", 8, 17, "#fff"], ["o", 16, 17, "#fff"]] },
 };
+// Evoluciones de las tres iniciales (nivel 16) y el jefe final.
+Object.assign(SPECIES, {
+  fogaro: { name: "Fogaro", type: "fuego", base: { hp: 68, atk: 82, def: 62, spd: 78 }, learn: [[1, "aranazo"], [1, "ascuas"], [14, "llamarada"], [24, "magma"]],
+    art: [["t", 1, 19, 5, 10, 7, 18, "#ffcc33"], ["e", 3, 9, 2, 3, "#ff3a1f"], ["e", 12, 15, 7, 7, "#ff6a2a"], ["e", 12, 17, 4, 4, "#ffd27a"], ["t", 10, 5, 11, 0, 13, 5, "#ffcc33"], ["t", 15, 5, 17, 0, 18, 5, "#ffcc33"], ["e", 14, 7, 5, 4, "#ff6a2a"], ["r", 4, 12, 2, 5, "#ff6a2a"], ["r", 19, 12, 2, 5, "#ff6a2a"], ["r", 8, 20, 3, 3, "#c84a1a"], ["r", 14, 20, 3, 3, "#c84a1a"], ["o", 12, 7, "#1b1b1b"], ["o", 16, 7, "#1b1b1b"], ["r", 15, 9, 3, 1, "#a8361a"]] },
+  marejo: { name: "Marejo", type: "agua", base: { hp: 78, atk: 66, def: 76, spd: 62 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]],
+    art: [["t", 1, 17, 6, 11, 7, 19, "#2a6fb5"], ["t", 23, 17, 18, 11, 17, 19, "#2a6fb5"], ["t", 3, 11, 12, 1, 21, 11, "#5ab8ff"], ["e", 12, 14, 9, 7, "#3f9de8"], ["e", 12, 17, 5, 3, "#a8dcff"], ["e", 7, 6, 2, 2, "#e8f7ff"], ["e", 17, 5, 2, 2, "#e8f7ff"], ["o", 9, 12, "#0d2a4a"], ["o", 15, 12, "#0d2a4a"], ["r", 11, 15, 3, 1, "#1d4f80"]] },
+  arbolon: { name: "Arbolón", type: "planta", base: { hp: 76, atk: 72, def: 82, spd: 52 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]],
+    art: [["r", 3, 12, 4, 2, "#7a4f2a"], ["r", 17, 12, 4, 2, "#7a4f2a"], ["e", 3, 11, 1, 1, "#62c56a"], ["e", 21, 11, 1, 1, "#62c56a"], ["r", 7, 9, 10, 13, "#7a4f2a"], ["r", 9, 10, 1, 10, "#8f6136"], ["e", 12, 6, 9, 5, "#3f9e45"], ["e", 9, 4, 3, 2, "#62c56a"], ["e", 16, 7, 2, 1, "#62c56a"], ["r", 7, 21, 3, 2, "#5a3a1e"], ["r", 14, 21, 3, 2, "#5a3a1e"], ["o", 10, 13, "#ffe14a"], ["o", 14, 13, "#ffe14a"]] },
+  obsidion: { name: "Guardián Obsidiano", type: "roca", boss: true, base: { hp: 120, atk: 80, def: 90, spd: 45 }, learn: [[1, "pedrada"], [1, "magma"], [1, "avalancha"], [1, "temblor"]],
+    art: [["r", 1, 9, 3, 9, "#3a2f55"], ["r", 20, 9, 3, 9, "#3a2f55"], ["r", 4, 6, 16, 15, "#2b2240"], ["e", 12, 6, 6, 4, "#3a2f55"], ["t", 5, 5, 7, 0, 9, 5, "#8a7aa8"], ["t", 15, 5, 17, 0, 19, 5, "#8a7aa8"], ["t", 6, 8, 7, 3, 8, 8, "#b48cff"], ["r", 8, 10, 1, 6, "#ff7a2e"], ["r", 15, 12, 1, 5, "#ff7a2e"], ["r", 11, 17, 3, 1, "#ff7a2e"], ["r", 5, 21, 4, 2, "#1d1630"], ["r", 15, 21, 4, 2, "#1d1630"], ["o", 10, 6, "#ff3a3a"], ["o", 14, 6, "#ff3a3a"]] },
+});
+const BESTIARY = Object.keys(SPECIES).filter((sp) => !SPECIES[sp].boss);
 const STARTERS = ["brasito", "gotin", "brotin"];
 
 /* ---------- Arte: rejilla de píxeles con perfilado automático ---------- */
@@ -303,6 +430,12 @@ const TILE_ART = {
     px(5, 12 - h + 2, "#ff6a1f", 6, h - 1); px(6, 12 - h, "#ffb02e", 4, h - 2); px(7, 12 - h + 2, "#fff1a1", 2, h - 5);
   }, 16 + f)),
   [T.DIRT]: [makeTile((px, r) => speckle(px, r, "#8a6a45", ["#7d5f3d", "#967451", "#a07c55"], 34), 18)],
+  [T.ALTAR]: [0, 1].map((f) => makeTile((px, r) => {
+    speckle(px, r, "#2b2240", ["#231b36", "#352a4f"], 30);
+    px(2, 2, "#4a3d6e", 12, 12); px(3, 3, "#1d1630", 10, 10);
+    px(7, 4, f ? "#d6b8ff" : "#b48cff", 2, 8); px(5, 7, f ? "#d6b8ff" : "#b48cff", 6, 2);
+    px(7, 7, "#ff7a2e", 2, 2);
+  }, 19 + f)),
 };
 
 /* ---------- Arte: personaje e iconos ---------- */
@@ -459,7 +592,63 @@ function newGame(starter) {
     box: [],
     seen: { [starter]: true },
   };
+  upgradeState();
   save();
+}
+
+// Añade lo que falte a partidas guardadas con versiones anteriores del juego.
+function upgradeState() {
+  S.seen = S.seen || {};
+  S.stats = S.stats || { got: {}, crafted: {}, placed: {}, caught: 0, wins: 0 };
+  S.quest = S.quest || 0;
+  if (!S.boss) S.boss = placeAltar();
+  explored = S.explored ? decodeBits(S.explored) : new Uint8Array((W * H) >> 3);
+  markExplored(S.player.x, S.player.y);
+}
+
+// El altar del jefe: en la zona de montaña más grande, rodeado de roca (hay que picar para llegar).
+function placeAltar() {
+  let best = null, bestScore = -1;
+  for (let y = 8; y < H - 8; y += 3) for (let x = 8; x < W - 8; x += 3) {
+    let score = 0;
+    for (let j = -5; j <= 5; j += 1) for (let i = -5; i <= 5; i += 1) {
+      const t = tileAt(x + i, y + j);
+      if (t === T.STONE || t === T.COAL || t === T.IRON || t === T.GEM) score++;
+    }
+    if (score > bestScore) { bestScore = score; best = { x, y }; }
+  }
+  if (!best) best = { x: W / 2 + 20, y: H / 2 + 20 };
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) setTile(best.x + i, best.y + j, T.DIRT);
+  setTile(best.x, best.y, T.ALTAR);
+  return { x: best.x, y: best.y, defeated: false };
+}
+
+/* Mapa explorado: un bit por casilla. */
+let explored = null;
+function markExplored(cx, cy, r = 7) {
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    if (x < 0 || y < 0 || x >= W || y >= H || (x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+    const i = idx(x, y);
+    explored[i >> 3] |= 1 << (i & 7);
+  }
+}
+const isExplored = (x, y) => explored && (explored[idx(x, y) >> 3] >> (idx(x, y) & 7)) & 1;
+function encodeBits(a) {
+  let s = "";
+  for (let i = 0; i < a.length; i += 4096) s += String.fromCharCode.apply(null, a.subarray(i, i + 4096));
+  return btoa(s);
+}
+function decodeBits(b64) {
+  const bin = atob(b64), a = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+  return a;
+}
+
+function track(kind, id, n = 1) {
+  const bucket = S.stats[kind];
+  if (typeof bucket === "object") bucket[id] = (bucket[id] || 0) + n;
+  else S.stats[kind] = (S.stats[kind] || 0) + (n || 1);
+  checkQuests();
 }
 
 function encodeWorld() {
@@ -471,6 +660,7 @@ function encodeWorld() {
 function save() {
   if (!S) return;
   try {
+    if (explored) S.explored = encodeBits(explored);
     localStorage.setItem(SAVE_KEY, JSON.stringify({ ...S, world: encodeWorld() }));
   } catch (e) { /* almacenamiento lleno o modo privado */ }
 }
@@ -485,7 +675,9 @@ function load() {
     for (let i = 0; i < bin.length; i++) world[i] = bin.charCodeAt(i);
     delete data.world;
     S = data;
-    return world.length === W * H;
+    if (world.length !== W * H) return false;
+    upgradeState();
+    return true;
   } catch (e) {
     return false;
   }
@@ -494,7 +686,11 @@ function load() {
 /* ---------- Inventario ---------- */
 
 const count = (id) => S.inv[id] || 0;
-function addItem(id, n = 1) { S.inv[id] = count(id) + n; renderHotbar(); }
+function addItem(id, n = 1, gathered = true) {
+  S.inv[id] = count(id) + n;
+  renderHotbar();
+  if (gathered) track("got", id, n);
+}
 function takeItem(id, n = 1) {
   S.inv[id] = count(id) - n;
   if (S.inv[id] <= 0) { delete S.inv[id]; if (S.sel === id) S.sel = null; }
@@ -507,6 +703,43 @@ function nearBench() {
   const { x, y } = S.player;
   for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) if (tileAt(x + i, y + j) === T.BENCH) return true;
   return false;
+}
+
+/* ---------- Misiones: guían la partida hasta el jefe final ---------- */
+
+const got = (id) => (S.stats.got[id] || 0);
+const QUESTS = [
+  { text: "Tala madera", goal: 3, prog: () => got("madera"), reward: { pocion: 1 }, tip: "Ponte delante de un árbol y pulsa A varias veces." },
+  { text: "Fabrica un banco de trabajo", goal: 1, prog: () => S.stats.crafted.banco || 0, reward: { cubo: 2 }, tip: "🛠️ → Tablas → Banco de trabajo. Ponlo en el suelo con B." },
+  { text: "Fabrica un pico de madera", goal: 1, prog: () => S.stats.crafted.pico_madera || 0, reward: { baya: 3 }, tip: "Necesitas tablas y palos." },
+  { text: "Captura una criatura", goal: 1, prog: () => S.stats.caught || 0, reward: { cubo: 3 }, tip: "Debilítala en combate y lánzale un cubo." },
+  { text: "Enciende una hoguera", goal: 1, prog: () => S.stats.placed.hoguera || 0, reward: { pocion: 2 }, tip: "2 madera + 1 carbón (pica piedra negra con el pico)." },
+  { text: "Consigue hierro", goal: 3, prog: () => got("hierro"), reward: { supercubo: 1 }, tip: "Las vetas naranjas de la montaña. Necesitas pico de piedra." },
+  { text: "Fabrica un pico de hierro", goal: 1, prog: () => S.stats.crafted.pico_hierro || 0, reward: { pocion: 3 }, tip: "En el banco: 3 hierro + 2 palos." },
+  { text: "Consigue una gema", goal: 1, prog: () => got("gema"), reward: { supercubo: 2 }, tip: "Las vetas turquesa, en lo más alto de la montaña." },
+  { text: "Descubre criaturas", goal: 8, prog: () => Object.keys(S.seen).filter((k) => !SPECIES[k].boss).length, reward: { pocion: 3, supercubo: 1 }, tip: "Explora de día y de noche, en la hierba, junto al agua y en la montaña." },
+  { text: "Derrota al Guardián Obsidiano", goal: 1, prog: () => (S.boss.defeated ? 1 : 0), reward: { gema: 3 }, tip: "Su altar está en la cumbre (míralo en el 🗺️ mapa). Ve con tu equipo a nivel 25 o más." },
+];
+
+function checkQuests() {
+  let q = QUESTS[S.quest];
+  while (q && q.prog() >= q.goal) {
+    for (const [id, n] of Object.entries(q.reward)) addItem(id, n, false);
+    const reward = Object.entries(q.reward).map(([id, n]) => `${n} ${ITEMS[id].name}`).join(", ");
+    S.quest++;
+    sfx("quest");
+    toast(`🎯 ¡Misión cumplida: ${q.text}! Premio: ${reward}`, 3500);
+    q = QUESTS[S.quest];
+  }
+  renderQuest();
+}
+
+function renderQuest() {
+  const el = $("#quest");
+  if (!el || !S) return;
+  const q = QUESTS[S.quest];
+  if (!q) { el.textContent = "🏆 ¡Has completado Pixelterra!"; return; }
+  el.textContent = `🎯 ${q.text}${q.goal > 1 ? ` (${Math.min(q.prog(), q.goal)}/${q.goal})` : ""}`;
 }
 
 /* ---------- Pantalla y bucle ---------- */
@@ -527,6 +760,54 @@ function resize() {
 addEventListener("resize", resize);
 
 const anim = { fromX: 0, fromY: 0, start: 0, moving: false, step: 0 };
+
+/* Efectos del mundo (en coordenadas de casilla). */
+const particles = [];  // { x, y, vx, vy, life, max, color }
+const floaters = [];   // { x, y, text, life }
+let shakeUntil = 0;
+const TILE_COLORS = {
+  [T.TREE]: ["#6b4426", "#2f7d32", "#4fa34f"], [T.STONE]: ["#8c8c8c", "#6e6e6e", "#a8a8a8"],
+  [T.COAL]: ["#1e1e1e", "#8c8c8c"], [T.IRON]: ["#d9a066", "#8c8c8c"], [T.GEM]: ["#2fd8c8", "#c8fff8", "#8c8c8c"],
+  [T.PLANKS]: ["#b8864b", "#8a5f30"], [T.BRICK]: ["#a65a45", "#d9d0c4"], [T.TALL]: ["#2f7a2f", "#7fd06a"], [T.FLOWER]: ["#ff5a6e", "#ffd23f", "#4fa34f"],
+};
+function burst(x, y, tile, n = 10) {
+  const cols = TILE_COLORS[tile] || ["#fff"];
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 2.5;
+    particles.push({ x: x + 0.5, y: y + 0.5, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2, life: 0, max: 0.45 + Math.random() * 0.3, color: pick(cols) });
+  }
+}
+function floatText(x, y, text) { floaters.push({ x: x + 0.5, y: y + 0.2, text, life: 0 }); }
+function shake(ms = 180) { shakeUntil = performance.now() + ms; }
+
+/* Criaturas que pasean por la hierba alta (si te tocan, empieza el combate). */
+const roamers = [];   // { mon, x, y, fromX, fromY, start, next, dir }
+function updateRoamers(now) {
+  const { x: px, y: py } = S.player;
+  for (let i = roamers.length - 1; i >= 0; i--) {
+    const r = roamers[i];
+    if (Math.abs(r.x - px) > 16 || Math.abs(r.y - py) > 16) { roamers.splice(i, 1); continue; }
+    if (now > r.next) {
+      r.next = now + 700 + Math.random() * 1400;
+      const [dx, dy] = pick(Object.values(DIRS));
+      const nx = r.x + dx, ny = r.y + dy, t = tileAt(nx, ny);
+      if ((t === T.TALL || t === T.GRASS || t === T.FLOWER || t === T.DIRT) && !roamers.some((o) => o.x === nx && o.y === ny)) {
+        r.fromX = r.x; r.fromY = r.y; r.start = now; r.x = nx; r.y = ny; r.dir = dx < 0 ? -1 : dx > 0 ? 1 : r.dir;
+      }
+    }
+    if (r.x === px && r.y === py && !modalOpen()) {
+      roamers.splice(i, 1);
+      return startWildBattle(r.mon);
+    }
+  }
+  // Aparecen nuevas criaturas cerca, en hierba alta, sin salir encima del jugador.
+  if (roamers.length < 6 && Math.random() < 0.02) {
+    const x = px + Math.floor(Math.random() * 21) - 10, y = py + Math.floor(Math.random() * 21) - 10;
+    if (tileAt(x, y) === T.TALL && Math.abs(x - px) + Math.abs(y - py) > 4) {
+      roamers.push({ mon: makeWild(), x, y, fromX: x, fromY: y, start: 0, next: now + 500, dir: 1 });
+    }
+  }
+}
 const mining = { x: -1, y: -1, hits: 0 };
 let lastTime = performance.now();
 let paused = true;
@@ -539,8 +820,18 @@ function loop(now) {
     S.time += dt / DAY_SECONDS;
     if (S.time >= 1) { S.time -= 1; S.day++; }
     updateMovement(now);
+    if (!modalOpen()) updateRoamers(now);
     if (holdA && now - lastA > 230) doAction();
     if (now - lastSave > 10000) { save(); lastSave = now; }
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 9 * dt;
+    if (p.life > p.max) particles.splice(i, 1);
+  }
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    floaters[i].life += dt;
+    if (floaters[i].life > 1.1) floaters.splice(i, 1);
   }
   render(now);
   requestAnimationFrame(loop);
@@ -567,7 +858,8 @@ function render(now) {
     px = anim.fromX + (S.player.x - anim.fromX) * k;
     py = anim.fromY + (S.player.y - anim.fromY) * k;
   }
-  const camX = px * size + size / 2 - viewW / 2, camY = py * size + size / 2 - viewH / 2;
+  let camX = px * size + size / 2 - viewW / 2, camY = py * size + size / 2 - viewH / 2;
+  if (now < shakeUntil) { camX += (Math.random() - 0.5) * scale * 3; camY += (Math.random() - 0.5) * scale * 3; }
   const x0 = Math.floor(camX / size) - 1, y0 = Math.floor(camY / size) - 1;
   const cols = Math.ceil(viewW / size) + 3, rows = Math.ceil(viewH / size) + 3;
   const frame = Math.floor(now / 500) % 2;
@@ -578,8 +870,27 @@ function render(now) {
     const tx = x0 + i, ty = y0 + j, t = tileAt(tx, ty);
     const art = TILE_ART[t];
     const dx = Math.round(tx * size - camX), dy = Math.round(ty * size - camY);
-    ctx.drawImage(art[art.length > 1 ? frame : 0], dx, dy, size, size);
+    if (t === T.TALL) {
+      // La hierba alta se mece un poco.
+      ctx.drawImage(TILE_ART[T.GRASS][0], dx, dy, size, size);
+      const sway = Math.round(Math.sin(now / 420 + tx * 0.9 + ty * 0.5) * scale * 0.6);
+      ctx.drawImage(art[0], dx + sway, dy, size, size);
+    } else ctx.drawImage(art[art.length > 1 ? frame : 0], dx, dy, size, size);
+    if (t === T.WATER || t === T.DEEP) {
+      // Espuma en la orilla.
+      ctx.fillStyle = "#e8f7ffb0";
+      const land = (xx, yy) => { const n = tileAt(xx, yy); return n !== T.WATER && n !== T.DEEP; };
+      const w = Math.max(1, scale);
+      if (land(tx, ty - 1)) ctx.fillRect(dx, dy, size, w);
+      if (land(tx, ty + 1)) ctx.fillRect(dx, dy + size - w, size, w);
+      if (land(tx - 1, ty)) ctx.fillRect(dx, dy, w, size);
+      if (land(tx + 1, ty)) ctx.fillRect(dx + size - w, dy, w, size);
+    } else if (t === T.TREE || t === T.STONE || t === T.BRICK || t === T.PLANKS) {
+      // Sombra suave debajo de los bloques altos.
+      if (WALKABLE.has(tileAt(tx, ty + 1))) { ctx.fillStyle = "#0000002a"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.18)); }
+    }
     if (t === T.FIRE) fires.push([dx + size / 2, dy + size / 2]);
+    if (t === T.ALTAR) fires.push([dx + size / 2, dy + size / 2]);
   }
   // Grietas en el bloque que se está rompiendo.
   if (mining.hits > 0) {
@@ -595,11 +906,45 @@ function render(now) {
   ctx.strokeStyle = "#ffffffaa";
   ctx.lineWidth = Math.max(1, scale / 2);
   ctx.strokeRect(Math.round(f.x * size - camX) + 1, Math.round(f.y * size - camY) + 1, size - 2, size - 2);
+  // Criaturas que pasean.
+  for (const r of roamers) {
+    const k = clamp((now - r.start) / 260, 0, 1);
+    const rx = (r.fromX + (r.x - r.fromX) * k) * size - camX, ry = (r.fromY + (r.y - r.fromY) * k) * size - camY;
+    if (rx < -size || ry < -size || rx > viewW || ry > viewH) continue;
+    const bob = Math.round(Math.abs(Math.sin(now / 200 + r.x)) * scale * 1.5);
+    ctx.fillStyle = "#0000003a";
+    ctx.beginPath(); ctx.ellipse(rx + size / 2, ry + size * 0.92, size * 0.32, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(Math.round(rx + size / 2), 0);
+    ctx.scale(r.dir, 1);
+    ctx.drawImage(monCanvas(r.mon.sp), -size * 0.48, Math.round(ry + size * 0.04 - bob), size * 0.96, size * 0.96);
+    ctx.restore();
+  }
   // Jugador.
   const pf = PLAYER[S.player.dir][anim.moving ? 1 + (anim.step % 2) : 0];
   const ppx = Math.round(px * size - camX), ppy = Math.round(py * size - camY);
+  ctx.fillStyle = "#00000040";
+  ctx.beginPath(); ctx.ellipse(ppx + size / 2, ppy + size * 0.96, size * 0.3, size * 0.09, 0, 0, Math.PI * 2); ctx.fill();
   const tallUnder = tileAt(S.player.x, S.player.y) === T.TALL && !anim.moving;
   ctx.drawImage(pf, 0, 0, TS, tallUnder ? 11 : TS, ppx, ppy, size, tallUnder ? size * 11 / 16 : size);
+  // Partículas y textos flotantes.
+  for (const p of particles) {
+    ctx.globalAlpha = 1 - p.life / p.max;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.round(p.x * size - camX), Math.round(p.y * size - camY), scale * 2, scale * 2);
+  }
+  ctx.globalAlpha = 1;
+  if (floaters.length) {
+    ctx.font = `800 ${Math.round(size * 0.32)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    for (const f of floaters) {
+      const fx = f.x * size - camX, fy = (f.y - f.life * 0.8) * size - camY;
+      ctx.globalAlpha = clamp(1.4 - f.life * 1.3, 0, 1);
+      ctx.fillStyle = "#000"; ctx.fillText(f.text, fx + scale, fy + scale);
+      ctx.fillStyle = "#fff"; ctx.fillText(f.text, fx, fy);
+    }
+    ctx.globalAlpha = 1;
+  }
   // Noche: oscuridad con luz alrededor del jugador y de las hogueras.
   const dark = darkness();
   if (dark > 0) {
@@ -628,9 +973,13 @@ function render(now) {
     }
     ctx.globalCompositeOperation = "source-over";
   }
-  // Reloj.
+  // Reloj (y música de día o de noche).
   const label = (isNight() ? "🌙 Noche " : "☀️ Día ") + S.day;
-  if (render.label !== label) { $("#clock").textContent = label; render.label = label; }
+  if (render.label !== label) {
+    $("#clock").textContent = label;
+    render.label = label;
+    if ($("#battle").hidden) playTheme(isNight() ? "night" : "day");
+  }
 }
 
 /* ---------- Movimiento ---------- */
@@ -668,7 +1017,9 @@ function updateMovement(now) {
 
 function onStep() {
   const t = tileAt(S.player.x, S.player.y);
-  if (t === T.TALL && rand() < 0.11) startWildBattle();
+  markExplored(S.player.x, S.player.y);
+  sfx(t === T.TALL ? "rustle" : "step");
+  if (t === T.TALL && rand() < 0.06) startWildBattle();
 }
 
 /* ---------- Acciones: A (usar) y B (poner) ---------- */
@@ -681,25 +1032,35 @@ function doAction() {
   const f = facing();
   const t = tileAt(f.x, f.y);
   if (t === T.FIRE) return restAtFire(f);
-  if (t === T.BENCH) return openPanel("craft");
+  if (t === T.BENCH) { sfx("click"); return openPanel("craft"); }
+  if (t === T.ALTAR) return challengeBoss();
   if (t === T.TALL || t === T.FLOWER) {
     setTile(f.x, f.y, T.GRASS);
-    if (rand() < (t === T.FLOWER ? 0.6 : 0.25)) { addItem("baya"); toast("+1 Baya"); }
+    burst(f.x, f.y, t, 6);
+    sfx("rustle");
+    if (rand() < (t === T.FLOWER ? 0.6 : 0.25)) { addItem("baya"); floatText(f.x, f.y, "+1 Baya"); sfx("pickup"); }
     return;
   }
   const m = MINE[t];
   if (!m) return;
   if (toolLevel() < m.tool) {
     const need = ["", "un pico de madera", "un pico de piedra", "un pico de hierro"][m.tool];
+    sfx("deny");
     return toast(`Necesitas ${need}`);
   }
   if (mining.x !== f.x || mining.y !== f.y) { mining.x = f.x; mining.y = f.y; mining.hits = 0; }
   mining.hits++;
   vibrate(8);
+  sfx("hit");
+  burst(f.x, f.y, t, 3);
   if (mining.hits >= Math.max(1, m.hits - toolLevel())) {
     setTile(f.x, f.y, m.leaves);
+    burst(f.x, f.y, t, 14);
+    shake(120);
+    sfx("break");
+    setTimeout(() => sfx("pickup"), 120);
     addItem(m.item, m.n);
-    toast(`+${m.n} ${ITEMS[m.item].name}`);
+    floatText(f.x, f.y, `+${m.n} ${ITEMS[m.item].name}`);
     mining.hits = 0;
   }
 }
@@ -710,15 +1071,19 @@ function doPlace() {
   if (!id || !count(id)) return toast("Elige arriba un bloque para poner (tablas, piedra, banco…)");
   const f = facing();
   const t = tileAt(f.x, f.y);
-  if (!WALKABLE.has(t)) return toast("No se puede poner ahí");
+  if (!WALKABLE.has(t) || roamers.some((r) => r.x === f.x && r.y === f.y)) { sfx("deny"); return toast("No se puede poner ahí"); }
   setTile(f.x, f.y, ITEMS[id].place);
   takeItem(id);
+  sfx("place");
+  track("placed", id);
   vibrate(10);
   if (id === "hoguera") toast("Hoguera encendida. Úsala con A para descansar.");
 }
 
 function restAtFire(f) {
   for (const mon of S.party) mon.hp = statsOf(mon).maxhp;
+  sfx("heal");
+  floatText(f.x, f.y, "💖");
   S.home = { x: S.player.x, y: S.player.y };
   save();
   toast("🔥 Tu equipo descansa junto al fuego. ¡Curado! (Partida guardada)");
@@ -858,6 +1223,9 @@ function monRow(mon, extra) {
 function renderPanel() {
   const box = $("#panel-content");
   box.innerHTML = "";
+  if (panelKind === "map") return renderMapPanel(box);
+  if (panelKind === "quests") return renderQuestsPanel(box);
+  if (panelKind === "victory") return renderVictory(box);
   if (panelKind === "bag") {
     $("#panel-title").textContent = "🎒 Mochila";
     const ids = Object.keys(S.inv);
@@ -902,7 +1270,9 @@ function renderPanel() {
       row.onclick = () => {
         if (!can) return toast(rec.bench && !bench ? "Necesitas estar junto a un banco de trabajo" : "Te faltan materiales");
         for (const [id, n] of Object.entries(rec.need)) takeItem(id, n);
-        addItem(rec.out, rec.n);
+        addItem(rec.out, rec.n, false);
+        sfx("craft");
+        track("crafted", rec.out, rec.n);
         vibrate(15);
         toast(`Fabricado: ${rec.n > 1 ? rec.n + " " : ""}${ITEMS[rec.out].name}`);
         renderPanel();
@@ -948,6 +1318,85 @@ function renderPanel() {
   }
 }
 
+function renderMapPanel(box) {
+  $("#panel-title").textContent = "🗺️ Mapa";
+  const c = document.createElement("canvas");
+  c.className = "map";
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  const img = x.createImageData(W, H);
+  const COL = {
+    [T.WATER]: [58, 143, 214], [T.DEEP]: [42, 111, 181], [T.SAND]: [232, 212, 143], [T.GRASS]: [95, 174, 79], [T.TALL]: [62, 138, 58],
+    [T.TREE]: [31, 94, 37], [T.STONE]: [140, 140, 140], [T.COAL]: [90, 90, 90], [T.IRON]: [190, 140, 100], [T.GEM]: [80, 200, 190],
+    [T.FLOWER]: [120, 180, 90], [T.PLANKS]: [184, 134, 75], [T.BRICK]: [166, 90, 69], [T.BENCH]: [160, 110, 60], [T.FIRE]: [255, 140, 40],
+    [T.DIRT]: [138, 106, 69], [T.ALTAR]: [150, 90, 220],
+  };
+  for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) {
+    const i = (yy * W + xx) * 4;
+    const col = isExplored(xx, yy) ? COL[tileAt(xx, yy)] || [0, 0, 0] : [16, 24, 18];
+    img.data[i] = col[0]; img.data[i + 1] = col[1]; img.data[i + 2] = col[2]; img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const dot = (px, py, col, r) => { x.fillStyle = "#000"; x.fillRect(px - r - 1, py - r - 1, r * 2 + 3, r * 2 + 3); x.fillStyle = col; x.fillRect(px - r, py - r, r * 2 + 1, r * 2 + 1); };
+  dot(S.home.x, S.home.y, "#ff8a3d", 1);
+  // El altar del jefe se marca a partir de la misión de la gema (o si ya lo has visto).
+  if (S.quest >= 7 || isExplored(S.boss.x, S.boss.y)) dot(S.boss.x, S.boss.y, S.boss.defeated ? "#4ade80" : "#ff3a3a", 2);
+  dot(S.player.x, S.player.y, "#ffffff", 2);
+  box.append(c);
+  const legend = document.createElement("p");
+  legend.className = "hint";
+  legend.innerHTML = "⬜ Tú · 🟧 Tu hoguera · 🟥 Altar del Guardián (aparece al llegar a la misión de la gema). Lo oscuro aún no lo has explorado.";
+  box.append(legend);
+  const opts = document.createElement("div");
+  opts.className = "toggles";
+  opts.innerHTML = `<label><input type="checkbox" id="opt-music" ${snd.musicOn ? "checked" : ""}> 🎵 Música</label>
+    <label><input type="checkbox" id="opt-sfx" ${snd.sfxOn ? "checked" : ""}> 🔊 Efectos de sonido</label>`;
+  box.append(opts);
+  $("#opt-music").onchange = (e) => { audio(); setMusic(e.target.checked); };
+  $("#opt-sfx").onchange = (e) => { audio(); setSfx(e.target.checked); sfx("click"); };
+  const reset = document.createElement("button");
+  reset.className = "row-card danger-row";
+  reset.innerHTML = "<div class='info'><b>🗑️ Empezar una partida nueva</b><small>Se borra este mundo y tu equipo.</small></div>";
+  reset.onclick = () => {
+    if (!confirm("¿Seguro? Se borrará tu mundo, tu equipo y tus objetos.")) return;
+    localStorage.removeItem(SAVE_KEY);
+    S = null;
+    location.reload();
+  };
+  box.append(reset);
+}
+
+function renderQuestsPanel(box) {
+  $("#panel-title").textContent = "🎯 Misiones";
+  QUESTS.forEach((q, i) => {
+    const row = document.createElement("div");
+    const done = i < S.quest, current = i === S.quest;
+    row.className = "quest-row" + (done ? " done" : current ? " current" : " locked");
+    const reward = Object.entries(q.reward).map(([id, n]) => `${n} ${ITEMS[id].name}`).join(", ");
+    const prog = current && q.goal > 1 ? ` (${Math.min(q.prog(), q.goal)}/${q.goal})` : "";
+    row.innerHTML = `<span class="q-ico">${done ? "✅" : current ? "🎯" : "🔒"}</span><div><b>${i < S.quest + 1 ? q.text + prog : "???"}</b>${current ? `<small>${q.tip}</small>` : ""}<small>Premio: ${i < S.quest + 1 ? reward : "?"}</small></div>`;
+    box.append(row);
+  });
+  const seen = Object.keys(S.seen).filter((k) => !SPECIES[k].boss).length;
+  const p = document.createElement("p");
+  p.className = "hint";
+  p.textContent = `Bestiario: ${seen} de ${BESTIARY.length} criaturas descubiertas · Victorias: ${S.stats.wins || 0} · Capturas: ${S.stats.caught || 0}`;
+  box.append(p);
+}
+
+function renderVictory(box) {
+  $("#panel-title").textContent = "🏆 ¡Victoria!";
+  box.innerHTML = `<div class="victory">
+    <canvas id="vic-boss" width="48" height="48"></canvas>
+    <h3>¡Has derrotado al Guardián Obsidiano!</h3>
+    <p>La cumbre vuelve a estar en calma y Pixelterra está a salvo gracias a ti y a tu equipo.</p>
+    <p class="hint">Puedes seguir explorando, completar el bestiario y construir lo que quieras. Tu partida continúa.</p>
+    <p class="hint">Pixelterra · juego original hecho para GBA Web.</p>
+  </div>`;
+  drawMonInto($("#vic-boss"), "obsidion");
+  checkQuests();
+}
+
 function usePotionOutside() {
   const mon = S.party.find((m) => m.hp < statsOf(m).maxhp);
   if (!mon) return toast("Tu equipo está bien de salud");
@@ -976,11 +1425,15 @@ function wildPool() {
   return pool;
 }
 
-function startWildBattle() {
-  if (!leader()) return;
+function makeWild() {
   const dist = Math.hypot(S.player.x - W / 2, S.player.y - H / 2);
   const lvl = clamp(Math.round(2 + dist / 11 + (rand() * 2 - 1) + (isNight() ? 2 : 0)), 2, 45);
-  const foe = makeMon(pick(wildPool()), lvl);
+  return makeMon(pick(wildPool()), lvl);
+}
+
+function startWildBattle(foe) {
+  if (!leader()) return;
+  foe = foe || makeWild();
   S.seen = S.seen || {};
   S.seen[foe.sp] = true;
   setHeld(null);
@@ -1015,31 +1468,37 @@ function menu(buttons) {
   }
 }
 
-async function battle(foe) {
+async function battle(foe, opts = {}) {
   B.foe = foe;
+  B.boss = !!opts.boss;
   B.ally = leader();
   $("#battle").hidden = false;
   $("#battle").classList.toggle("night", isNight());
+  $("#battle").classList.toggle("boss", B.boss);
   drawMonInto($("#foe-sprite"), foe.sp);
   drawMonInto($("#ally-sprite"), B.ally.sp);
-  $("#foe-sprite").className = "mon";
+  $("#foe-sprite").className = "mon enter";
+  $("#ally-sprite").className = "mon enter";
   renderCards();
   menu([]);
   vibrate(30);
-  await say(`¡Un ${SPECIES[foe.sp].name} salvaje aparece!`);
+  sfx("encounter");
+  playTheme(B.boss ? "boss" : "battle");
+  await say(B.boss ? `¡El ${SPECIES[foe.sp].name} despierta!` : `¡Un ${SPECIES[foe.sp].name} salvaje aparece!`, B.boss ? 1600 : 1100);
   await say(`¡Adelante, ${SPECIES[B.ally.sp].name}!`, 700);
   mainMenu();
 }
 
 function mainMenu() {
   $("#battle-msg").textContent = `¿Qué hará ${SPECIES[B.ally.sp].name}?`;
+  const noCatch = B.boss ? "¡No se puede!" : null;
   menu([
     ["⚔️ Luchar", fightMenu],
-    ["🧊 Cubo", () => throwCube("cubo"), `Tienes ${count("cubo")}`, !count("cubo")],
-    ...(count("supercubo") ? [["💠 Supercubo", () => throwCube("supercubo"), `Tienes ${count("supercubo")}`]] : []),
+    ["🧊 Cubo", () => throwCube("cubo"), noCatch || `Tienes ${count("cubo")}`, B.boss || !count("cubo")],
+    ...(count("supercubo") && !B.boss ? [["💠 Supercubo", () => throwCube("supercubo"), `Tienes ${count("supercubo")}`]] : []),
     ["🧪 Poción", usePotionBattle, `Tienes ${count("pocion")}`, !count("pocion")],
     ["🐾 Cambiar", switchMenu, "", S.party.filter((m) => m.hp > 0).length < 2],
-    ["🏃 Huir", runAway],
+    ["🏃 Huir", runAway, noCatch || "", B.boss],
   ]);
 }
 
@@ -1048,7 +1507,9 @@ function fightMenu() {
   menu([
     ...ally.moves.map((id) => {
       const mv = MOVES[id];
-      return [mv.name, () => turn({ kind: "move", id }), `${TYPES[mv.type].name} · Poder ${mv.pow}`];
+      const eff = (EFFECT[mv.type] && EFFECT[mv.type][SPECIES[B.foe.sp].type]) || 1;
+      const hint = eff > 1 ? " · ¡Eficaz!" : eff < 1 ? " · Poco eficaz" : "";
+      return [`<span class="mv-dot" style="background:${TYPES[mv.type].color}"></span>${mv.name}`, () => turn({ kind: "move", id }), `${TYPES[mv.type].name} · Poder ${mv.pow}${hint}`];
     }),
     ["↩️ Atrás", mainMenu],
   ]);
@@ -1061,46 +1522,74 @@ function switchMenu() {
   ]);
 }
 
-function damage(att, def, moveId) {
+function damage(att, def, moveId, noRandom) {
   const mv = MOVES[moveId];
   const as = statsOf(att), ds = statsOf(def);
   const stab = SPECIES[att.sp].type === mv.type ? 1.3 : 1;
   const eff = (EFFECT[mv.type] && EFFECT[mv.type][SPECIES[def.sp].type]) || 1;
-  const crit = rand() < 0.06 ? 1.5 : 1;
+  const crit = !noRandom && rand() < 0.06 ? 1.5 : 1;
   const base = (((2 * att.lvl) / 5 + 2) * mv.pow * (as.atk / ds.def)) / 50 + 2;
-  return { dmg: Math.max(1, Math.floor(base * stab * eff * crit * (0.85 + rand() * 0.15))), eff, crit };
+  return { dmg: Math.max(1, Math.floor(base * stab * eff * crit * (noRandom ? 0.92 : 0.85 + rand() * 0.15))), eff, crit };
+}
+
+function restartAnim(el, cls) {
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+}
+
+function popDamage(el, text, color) {
+  const d = document.createElement("div");
+  d.className = "dmg";
+  d.textContent = text;
+  d.style.color = color;
+  const r = el.getBoundingClientRect(), a = $("#battle").getBoundingClientRect();
+  d.style.left = r.left - a.left + r.width / 2 + "px";
+  d.style.top = r.top - a.top + r.height * 0.25 + "px";
+  $("#battle").append(d);
+  setTimeout(() => d.remove(), 900);
 }
 
 async function attack(att, def, moveId, defEl) {
   const mv = MOVES[moveId];
-  await say(`¡${SPECIES[att.sp].name} usa ${mv.name}!`, 700);
+  const attEl = defEl.id === "foe-sprite" ? $("#ally-sprite") : $("#foe-sprite");
+  await say(`¡${SPECIES[att.sp].name} usa ${mv.name}!`, 550);
+  restartAnim(attEl, attEl.id === "ally-sprite" ? "lungeR" : "lungeL");
+  await sleep(180);
   const { dmg, eff, crit } = damage(att, def, moveId);
   def.hp = Math.max(0, def.hp - dmg);
-  defEl.classList.remove("hit"); void defEl.offsetWidth; defEl.classList.add("hit");
-  vibrate(20);
+  defEl.style.setProperty("--fx", TYPES[mv.type].color);
+  restartAnim(defEl, "hit");
+  sfx(eff > 1 || crit > 1 ? "superHit" : "attack");
+  popDamage(defEl, `-${dmg}`, eff > 1 ? "#ff5a3a" : "#fff");
+  if (eff > 1 || crit > 1) restartAnim($("#battle"), "shake");
+  vibrate(eff > 1 ? 40 : 20);
   renderCards();
   if (crit > 1) await say("¡Un golpe crítico!", 700);
   if (eff > 1) await say("¡Es muy eficaz!", 800);
   else if (eff < 1) await say("No es muy eficaz…", 800);
-  else await sleep(300);
+  else await sleep(350);
 }
 
-function enemyMove() { return pick(B.foe.moves); }
+// El rival suele elegir el ataque que más daño hace (a veces se equivoca).
+function enemyMove() {
+  if (rand() < 0.3) return pick(B.foe.moves);
+  return B.foe.moves.reduce((best, m) => (damage(B.foe, B.ally, m, true).dmg > damage(B.foe, B.ally, best, true).dmg ? m : best));
+}
 
 async function turn(action) {
   B.busy = true;
   menu([]);
   const ally = B.ally, foe = B.foe;
-  const foeMove = enemyMove();
   if (action.kind === "switch") {
     B.ally = action.mon;
     drawMonInto($("#ally-sprite"), B.ally.sp);
+    restartAnim($("#ally-sprite"), "enter");
     renderCards();
     await say(`¡Vuelve! ¡Adelante, ${SPECIES[B.ally.sp].name}!`);
-    await attack(foe, B.ally, foeMove, $("#ally-sprite"));
+    await attack(foe, B.ally, enemyMove(), $("#ally-sprite"));
   } else if (action.kind === "free") {
-    await attack(foe, ally, foeMove, $("#ally-sprite"));
+    await attack(foe, ally, enemyMove(), $("#ally-sprite"));
   } else {
+    const foeMove = enemyMove();
     const allyFirst = statsOf(ally).spd >= statsOf(foe).spd;
     const order = allyFirst ? [[ally, foe, action.id, $("#foe-sprite")], [foe, ally, foeMove, $("#ally-sprite")]]
       : [[foe, ally, foeMove, $("#ally-sprite")], [ally, foe, action.id, $("#foe-sprite")]];
@@ -1115,11 +1604,21 @@ async function turn(action) {
 async function afterTurn() {
   const foe = B.foe;
   if (foe.hp <= 0) {
-    await say(`¡${SPECIES[foe.sp].name} salvaje se debilita!`);
+    sfx("faint");
+    restartAnim($("#foe-sprite"), "faint");
+    await say(B.boss ? `¡El ${SPECIES[foe.sp].name} ha caído!` : `¡${SPECIES[foe.sp].name} salvaje se debilita!`);
+    track("wins");
     await gainXp(foe);
+    if (B.boss) {
+      S.boss.defeated = true;
+      endBattle();
+      return showVictory();
+    }
     return endBattle();
   }
   if (B.ally.hp <= 0) {
+    sfx("faint");
+    restartAnim($("#ally-sprite"), "faint");
     await say(`¡${SPECIES[B.ally.sp].name} se ha debilitado!`);
     const next = leader();
     if (!next) {
@@ -1130,6 +1629,7 @@ async function afterTurn() {
     }
     B.ally = next;
     drawMonInto($("#ally-sprite"), next.sp);
+    restartAnim($("#ally-sprite"), "enter");
     renderCards();
     await say(`¡Adelante, ${SPECIES[next.sp].name}!`);
   }
@@ -1138,27 +1638,49 @@ async function afterTurn() {
 }
 
 async function gainXp(foe) {
-  const winners = [B.ally];
-  const gain = foe.lvl * 7 + 6;
-  for (const mon of winners) {
-    mon.xp += gain;
-    await say(`${SPECIES[mon.sp].name} gana ${gain} puntos de experiencia.`, 900);
-    while (mon.xp >= xpNeeded(mon.lvl)) {
-      mon.xp -= xpNeeded(mon.lvl);
-      const before = statsOf(mon).maxhp;
-      mon.lvl++;
-      mon.hp += statsOf(mon).maxhp - before;
-      renderCards();
-      await say(`¡${SPECIES[mon.sp].name} sube al nivel ${mon.lvl}!`, 1000);
-      for (const [l, m] of SPECIES[mon.sp].learn) {
-        if (l === mon.lvl && !mon.moves.includes(m)) {
-          mon.moves.push(m);
-          if (mon.moves.length > 4) mon.moves.shift();
-          await say(`¡Ha aprendido ${MOVES[m].name}!`, 1000);
+  const mon = B.ally;
+  const gain = Math.round((foe.lvl * 7 + 6) * (B.boss ? 3 : 1));
+  mon.xp += gain;
+  await say(`${SPECIES[mon.sp].name} gana ${gain} puntos de experiencia.`, 900);
+  // Las demás criaturas del equipo aprenden un poco mirando.
+  for (const other of S.party) if (other !== mon && other.hp > 0) other.xp += Math.floor(gain / 3);
+  for (const m of S.party) {
+    while (m.xp >= xpNeeded(m.lvl)) {
+      m.xp -= xpNeeded(m.lvl);
+      const before = statsOf(m).maxhp;
+      m.lvl++;
+      m.hp += statsOf(m).maxhp - before;
+      if (m === mon) renderCards();
+      sfx("levelUp");
+      await say(`¡${SPECIES[m.sp].name} sube al nivel ${m.lvl}!`, 1000);
+      for (const [l, mv] of SPECIES[m.sp].learn) {
+        if (l === m.lvl && !m.moves.includes(mv)) {
+          m.moves.push(mv);
+          if (m.moves.length > 4) m.moves.shift();
+          await say(`¡Ha aprendido ${MOVES[mv].name}!`, 1000);
         }
       }
     }
+    await maybeEvolve(m);
   }
+}
+
+async function maybeEvolve(m) {
+  const evo = SPECIES[m.sp].evo;
+  if (!evo || m.lvl < evo.lvl) return;
+  const from = SPECIES[m.sp].name;
+  await say(`¿Eh? ¡${from} está evolucionando!`, 1200);
+  const el = m === B.ally ? $("#ally-sprite") : null;
+  if (el) restartAnim(el, "evolve");
+  sfx("caught");
+  await sleep(1200);
+  const ratio = m.hp / statsOf(m).maxhp;
+  m.sp = evo.to;
+  m.hp = Math.max(1, Math.round(statsOf(m).maxhp * ratio));
+  for (const [l, mv] of SPECIES[m.sp].learn) if (l <= m.lvl && !m.moves.includes(mv)) { m.moves.push(mv); if (m.moves.length > 4) m.moves.shift(); }
+  S.seen[m.sp] = true;
+  if (el) { drawMonInto(el, m.sp); renderCards(); }
+  await say(`¡${from} ha evolucionado en ${SPECIES[m.sp].name}!`, 1500);
 }
 
 async function throwCube(kind) {
@@ -1171,14 +1693,17 @@ async function throwCube(kind) {
   const hpFactor = 1 - (2 / 3) * (foe.hp / st.maxhp);
   const chance = clamp(hpFactor * (kind === "supercubo" ? 1.9 : 1.1) * (1 - foe.lvl / 110), 0.05, 0.97);
   const shakes = rand() < chance ? 3 : Math.floor(rand() * 3);
-  el.classList.add("caught");
-  for (let i = 0; i < shakes; i++) { await say(["Se mueve…", "Se mueve otra vez…", "¡Casi!"][i], 650); vibrate(15); }
+  el.className = "mon caught";
+  sfx("shake");
+  for (let i = 0; i < shakes; i++) { await say(["Se mueve…", "Se mueve otra vez…", "¡Casi!"][i], 650); sfx("shake"); vibrate(15); }
   if (shakes === 3) {
     vibrate([30, 60, 30]);
+    sfx("caught");
     await say(`¡Has capturado a ${SPECIES[foe.sp].name}!`, 1300);
     const caught = { ...foe, xp: 0 };
     if (S.party.length < 6) S.party.push(caught);
     else { S.box.push(caught); await say("Tu equipo está lleno: se envía a la caja.", 1100); }
+    track("caught");
     return endBattle();
   }
   el.classList.remove("caught");
@@ -1192,6 +1717,7 @@ async function usePotionBattle() {
   takeItem("pocion");
   const st = statsOf(B.ally);
   B.ally.hp = Math.min(st.maxhp, B.ally.hp + 30);
+  sfx("heal");
   renderCards();
   await say(`${SPECIES[B.ally.sp].name} recupera salud.`, 900);
   await turn({ kind: "free" });
@@ -1209,8 +1735,28 @@ async function runAway() {
 function endBattle() {
   B.busy = false;
   $("#battle").hidden = true;
+  playTheme(isNight() ? "night" : "day");
   renderHotbar();
+  checkQuests();
   save();
+}
+
+/* ---------- Jefe final ---------- */
+
+function challengeBoss() {
+  if (S.boss.defeated) { sfx("click"); return toast("El altar está en calma. Pixelterra está a salvo. 🏆"); }
+  const best = Math.max(...S.party.map((m) => m.lvl));
+  if (best < 20) toast("⚠️ El Guardián es muy fuerte (Nv 30). Mejor ven con criaturas de nivel 25 o más.", 3500);
+  setHeld(null);
+  holdA = false;
+  S.seen.obsidion = true;
+  battle(makeMon("obsidion", 30), { boss: true });
+}
+
+function showVictory() {
+  sfx("quest");
+  setTimeout(() => sfx("caught"), 700);
+  openPanel("victory");
 }
 
 /* ---------- Inicio ---------- */
@@ -1245,6 +1791,8 @@ function showIntro() {
 function start() {
   paused = false;
   renderHotbar();
+  renderQuest();
+  playTheme(isNight() ? "night" : "day");
 }
 
 addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
@@ -1255,4 +1803,4 @@ if (load()) start();
 else showIntro();
 requestAnimationFrame(loop);
 
-window.pixelterra = { get state() { return S; }, tileAt, setTile, T, startWildBattle, save }; // para pruebas
+window.pixelterra = { get state() { return S; }, tileAt, setTile, T, startWildBattle, save, roamers, B }; // para pruebas

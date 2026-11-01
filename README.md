@@ -40,6 +40,11 @@ coleccionables, con criaturas, nombres y gráficos propios (todo dibujado con c�
 - **12 criaturas** de 6 tipos, combates por turnos con eficacias, experiencia y niveles, captura
   con cubos, equipo de 6 y caja.
 - Día y noche (de noche aparecen criaturas distintas y las hogueras iluminan). Guardado automático.
+- **Misiones** que guían la partida hasta el jefe final, el **Guardián Obsidiano**, en la cumbre.
+- **Evoluciones** (Brasito → Fogaro, Gotín → Marejo, Brotín → Arbolón al nivel 16).
+- Criaturas que **pasean por el mapa**, **mapa** que se descubre al explorar, chispas al romper
+  bloques, espuma en la orilla y hierba que se mece.
+- **Sonido y música** sintetizados con WebAudio (sin archivos), con opción para quitarlos.
 
 ## Cómo jugar en el iPhone
 
