@@ -1719,6 +1719,16 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Sin modo sin conexión", e));
 }
 
+/* ---------- Sin zoom accidental del navegador (iPhone ignora user-scalable=no) ---------- */
+
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest(".sheet-body, input, textarea")) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, (e) => e.preventDefault());
+
 /* ---------- Inicio ---------- */
 
 loadLibrary();

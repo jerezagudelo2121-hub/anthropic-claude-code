@@ -438,6 +438,60 @@ const TILE_ART = {
   }, 19 + f)),
 };
 
+/* ---------- Arte extra: variantes del suelo y árboles grandes ---------- */
+
+// Número pseudoaleatorio estable para cada casilla (para elegir variantes sin parpadeos).
+function hash(x, y, k = 0) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(k, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+const GROUND_VARIANTS = {
+  [T.GRASS]: [
+    TILE_ART[T.GRASS][0],
+    makeTile((px, r) => { speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a", "#4f9a42"], 34); px(3, 11, "#9a9a8a", 2, 1); px(4, 10, "#b5b5a5"); px(11, 4, "#9a9a8a"); }, 31),
+    makeTile((px, r) => { speckle(px, r, "#62b252", ["#57a248", "#71c25f", "#4f9a42"], 30); px(9, 9, "#f2efe6", 3, 1); px(9, 10, "#c9483a", 3, 1); px(10, 11, "#e8e0cc", 1, 2); }, 32),
+    makeTile((px, r) => { speckle(px, r, "#5aa94b", ["#4f9a42", "#6bbb5a"], 30); for (const [x, y] of [[3, 3], [12, 6], [6, 12]]) { px(x, y, "#3e8a3a", 3, 1); px(x + 1, y - 1, "#3e8a3a"); px(x + 1, y + 1, "#3e8a3a"); } }, 33),
+    makeTile((px, r) => { speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a"], 26); px(4, 6, "#ffffff"); px(12, 10, "#ffd23f"); px(8, 13, "#ffffff"); }, 34),
+  ],
+  [T.SAND]: [
+    TILE_ART[T.SAND][0],
+    makeTile((px, r) => { speckle(px, r, "#e8d48f", ["#dcc67f", "#f3e2a6"], 28); px(5, 6, "#ffd8c8", 2, 2); px(6, 5, "#f0b8a8"); }, 35),
+    makeTile((px, r) => { speckle(px, r, "#ead796", ["#dcc67f", "#f3e2a6", "#cbb46a"], 34); px(11, 10, "#a89a7a", 2, 1); px(3, 12, "#a89a7a"); }, 36),
+  ],
+  [T.DIRT]: [
+    TILE_ART[T.DIRT][0],
+    makeTile((px, r) => { speckle(px, r, "#856543", ["#7d5f3d", "#967451", "#6e5235"], 36); px(4, 9, "#9a9a8a", 2, 2); px(12, 4, "#6b5034", 2, 1); }, 37),
+  ],
+  [T.TALL]: [
+    TILE_ART[T.TALL][0],
+    makeTile((px, r) => {
+      speckle(px, r, "#4a9140", ["#4a9140", "#57a248"], 16);
+      for (let i = 0; i < 10; i++) { const x = 1 + ((i * 3 + 2) % 14), y = 3 + ((i * 5) % 10); px(x, y, "#2a702a", 1, 5); px(x + 1, y + 1, "#8ad874", 1, 3); }
+    }, 38),
+  ],
+};
+
+function treeArt(ops) { return gridToCanvas(rasterize(ops, 32), 32, 1, "#13361a"); }
+const TREES = [
+  treeArt([["e", 16, 21, 9, 4, "#23652a"], ["r", 14, 22, 4, 9, "#6b4426"], ["r", 15, 22, 1, 9, "#8a5a32"], ["r", 12, 30, 8, 1, "#5a381f"],
+    ["e", 16, 13, 12, 10, "#2c7a32"], ["e", 10, 11, 6, 5, "#3f9a40"], ["e", 21, 10, 6, 5, "#3f9a40"], ["e", 15, 7, 6, 4, "#4fae4a"], ["e", 16, 18, 9, 3, "#25682b"],
+    ["e", 9, 9, 2, 1, "#7fd06a"], ["e", 19, 6, 2, 1, "#7fd06a"], ["e", 14, 5, 2, 1, "#8ee07a"]]),
+  treeArt([["r", 15, 24, 3, 7, "#5a381f"], ["r", 16, 24, 1, 7, "#7a4f2a"], ["t", 16, 26, 4, 27, 28, 27, "#1f5e3a"],
+    ["t", 16, 13, 5, 26, 27, 26, "#23683f"], ["t", 16, 7, 7, 19, 25, 19, "#2b7a48"], ["t", 16, 1, 9, 12, 23, 12, "#358a54"],
+    ["t", 16, 3, 13, 10, 16, 10, "#56b070"], ["t", 15, 10, 11, 17, 15, 17, "#3f9a5a"]]),
+  treeArt([["r", 14, 22, 4, 9, "#6b4426"], ["r", 15, 22, 1, 9, "#8a5a32"], ["e", 16, 13, 12, 10, "#3a8a36"], ["e", 11, 10, 6, 5, "#4fae4a"], ["e", 21, 11, 5, 4, "#4fae4a"], ["e", 16, 7, 5, 3, "#63c25a"],
+    ["r", 9, 12, 2, 2, "#e23b3b"], ["r", 20, 9, 2, 2, "#e23b3b"], ["r", 14, 17, 2, 2, "#e23b3b"], ["r", 22, 15, 2, 2, "#e23b3b"], ["r", 17, 12, 2, 2, "#ff6a5a"], ["e", 13, 6, 2, 1, "#8ee07a"]]),
+];
+GROUND_VARIANTS[T.STONE] = [
+  TILE_ART[T.STONE][0],
+  makeTile((px, r) => { stoneBase(px, r); px(3, 3, "#5f8a4a", 3, 2); px(4, 2, "#78a35c", 2, 1); px(11, 12, "#5f8a4a", 2, 1); }, 41),
+  makeTile((px, r) => { stoneBase(px, r); px(4, 9, "#6a6a6a", 1, 4); px(5, 12, "#6a6a6a", 3, 1); px(10, 3, "#6a6a6a", 1, 3); px(11, 5, "#6a6a6a", 2, 1); }, 42),
+  makeTile((px, r) => { speckle(px, r, "#7f7f86", ["#73737a", "#8c8c93"], 40); px(2, 2, "#9a9aa2", 6, 5); px(3, 3, "#b0b0b8", 4, 1); px(2, 6, "#5c5c63", 6, 1); px(9, 9, "#9a9aa2", 5, 4); px(10, 10, "#b0b0b8", 3, 1); px(9, 12, "#5c5c63", 5, 1); }, 43),
+];
+const treeVariant = (x, y) => { const h = hash(x, y, 7) % 10; return h < 6 ? 0 : h < 9 ? 1 : 2; };
+
 /* ---------- Arte: personaje e iconos ---------- */
 
 function playerFrame(dir, step) {
@@ -753,7 +807,7 @@ function resize() {
   canvas.width = Math.round(innerWidth * dpr);
   canvas.height = Math.round(innerHeight * dpr);
   // Unas 10–11 casillas en el lado corto de la pantalla.
-  scale = Math.max(2, Math.floor(Math.min(canvas.width, canvas.height) / (TS * 10.5)));
+  scale = Math.max(2, Math.floor(Math.min(canvas.width, canvas.height) / (TS * 10.5 / ZOOMS[zoomLevel])));
   viewW = canvas.width; viewH = canvas.height;
   ctx.imageSmoothingEnabled = false;
 }
@@ -808,6 +862,90 @@ function updateRoamers(now) {
     }
   }
 }
+/* ---------- Ambiente: bichos, hojas, nubes y lluvia ---------- */
+
+const amb = { bugs: [], leaves: [], drops: [], clouds: [], splashes: [], rainGain: null };
+const isRock = (t) => t === T.STONE || t === T.COAL || t === T.IRON || t === T.GEM;
+const raining = () => S && S.weather === "rain";
+
+function newDayWeather() {
+  // Llueve aproximadamente uno de cada cuatro días.
+  S.weather = Math.random() < 0.25 ? "rain" : "sun";
+  if (S.weather === "rain") toast("🌧️ Empieza a llover…", 2500);
+}
+
+function updateAmbient(dt, now) {
+  const { x: px, y: py } = S.player;
+  const night = isNight();
+  // Mariposas de día y luciérnagas de noche alrededor del jugador.
+  const want = raining() ? 0 : night ? 16 : 6;
+  while (amb.bugs.length < want) {
+    const x = px + (Math.random() * 18 - 9), y = py + (Math.random() * 18 - 9);
+    const t = tileAt(Math.floor(x), Math.floor(y));
+    if (t === T.WATER || t === T.DEEP || isRock(t)) break;
+    amb.bugs.push({ x, y, vx: 0, vy: 0, a: Math.random() * 6, night, color: pick(night ? ["#d8ff7a"] : ["#ffffff", "#ffd23f", "#ff9ad5", "#9ad0ff"]) });
+  }
+  for (let i = amb.bugs.length - 1; i >= 0; i--) {
+    const b = amb.bugs[i];
+    if (b.night !== night || amb.bugs.length > want || Math.abs(b.x - px) > 12 || Math.abs(b.y - py) > 12) { amb.bugs.splice(i, 1); continue; }
+    b.a += dt * (b.night ? 1.2 : 3);
+    b.vx += (Math.random() - 0.5) * dt * 3; b.vy += (Math.random() - 0.5) * dt * 3;
+    b.vx *= 0.97; b.vy *= 0.97;
+    b.x += b.vx * dt + Math.cos(b.a) * dt * 0.3; b.y += b.vy * dt + Math.sin(b.a * 1.3) * dt * 0.3;
+  }
+  // Hojas que caen de los árboles cercanos.
+  if (!night && Math.random() < dt * 1.5) {
+    const tx = px + Math.floor(Math.random() * 15 - 7), ty = py + Math.floor(Math.random() * 15 - 7);
+    if (tileAt(tx, ty) === T.TREE) amb.leaves.push({ x: tx + 0.3 + Math.random() * 0.4, y: ty - 0.4, t: 0, s: Math.random() * 6, color: pick(["#4fae4a", "#7fd06a", "#d9b24a"]) });
+  }
+  for (let i = amb.leaves.length - 1; i >= 0; i--) {
+    const l = amb.leaves[i];
+    l.t += dt; l.y += dt * 0.5; l.x += Math.sin(l.t * 3 + l.s) * dt * 0.6;
+    if (l.t > 2.2) amb.leaves.splice(i, 1);
+  }
+  // Nubes que pasan (sus sombras se ven en el suelo).
+  if (!amb.clouds.length) for (let i = 0; i < 4; i++) amb.clouds.push({ x: px + Math.random() * 30 - 15, y: py + Math.random() * 30 - 15, r: 3 + Math.random() * 3 });
+  for (const c of amb.clouds) {
+    c.x += dt * 0.35; c.y += dt * 0.12;
+    if (c.x - px > 18) { c.x = px - 18; c.y = py + Math.random() * 24 - 12; }
+    if (Math.abs(c.y - py) > 18) c.y = py + Math.random() * 24 - 12;
+  }
+  // Lluvia: gotas en pantalla y salpicaduras en el suelo.
+  if (raining()) {
+    while (amb.drops.length < 140) amb.drops.push({ x: Math.random(), y: Math.random(), v: 0.9 + Math.random() * 0.6 });
+    for (const d of amb.drops) { d.y += d.v * dt * 1.4; d.x -= d.v * dt * 0.25; if (d.y > 1.05) { d.y = -0.05; d.x = Math.random() * 1.2; } }
+    if (Math.random() < dt * 30) amb.splashes.push({ x: px + Math.random() * 14 - 7, y: py + Math.random() * 20 - 10, t: 0 });
+  } else amb.drops.length = 0;
+  for (let i = amb.splashes.length - 1; i >= 0; i--) { amb.splashes[i].t += dt; if (amb.splashes[i].t > 0.35) amb.splashes.splice(i, 1); }
+  rainSound(raining() && !modalOpen());
+}
+
+// Sonido de lluvia: ruido filtrado en bucle.
+function rainSound(on) {
+  const c = snd.ctx;
+  if (!c) return;
+  if (!amb.rainGain) {
+    const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = buf; src.loop = true; f.type = "highpass"; f.frequency.value = 900; g.gain.value = 0;
+    src.connect(f); f.connect(g); g.connect(snd.master); src.start();
+    amb.rainGain = g;
+  }
+  amb.rainGain.gain.setTargetAtTime(on && snd.sfxOn ? 0.05 : 0, c.currentTime, 0.4);
+}
+
+/* Zoom de la cámara: doble toque en el mapa para alejar o acercar. */
+const ZOOMS = [1, 0.8, 0.62];
+let zoomLevel = (Number(localStorage.getItem("pixelterra-zoom")) || 0) % ZOOMS.length;
+function cycleZoom() {
+  zoomLevel = (zoomLevel + 1) % ZOOMS.length;
+  localStorage.setItem("pixelterra-zoom", zoomLevel);
+  resize();
+  sfx("click");
+  toast(["🔍 Cámara normal", "🔍 Cámara lejos", "🔍 Cámara muy lejos"][zoomLevel], 1200);
+}
+
 const mining = { x: -1, y: -1, hits: 0 };
 let lastTime = performance.now();
 let paused = true;
@@ -818,7 +956,8 @@ function loop(now) {
   lastTime = now;
   if (!paused) {
     S.time += dt / DAY_SECONDS;
-    if (S.time >= 1) { S.time -= 1; S.day++; }
+    if (S.time >= 1) { S.time -= 1; S.day++; newDayWeather(); }
+    updateAmbient(dt, now);
     updateMovement(now);
     if (!modalOpen()) updateRoamers(now);
     if (holdA && now - lastA > 230) doAction();
@@ -848,6 +987,26 @@ function darkness() {
   return 0.62 * (1 - t / 0.05);
 }
 
+function dawnDusk() {
+  // Luz cálida al amanecer y al atardecer (0–1).
+  const t = S.time;
+  if (t > 0.03 && t < 0.14) return 1 - Math.abs(t - 0.085) / 0.055;
+  if (t > 0.5 && t < 0.64) return 1 - Math.abs(t - 0.57) / 0.07;
+  return 0;
+}
+
+function vignette() {
+  const v = vignette.c || (vignette.c = document.createElement("canvas"));
+  if (v.width !== viewW || v.height !== viewH) {
+    v.width = viewW; v.height = viewH;
+    const c = v.getContext("2d");
+    const g = c.createRadialGradient(viewW / 2, viewH / 2, Math.min(viewW, viewH) * 0.35, viewW / 2, viewH / 2, Math.max(viewW, viewH) * 0.75);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.35)");
+    c.fillStyle = g; c.fillRect(0, 0, viewW, viewH);
+  }
+  return v;
+}
+
 function render(now) {
   if (!S) { ctx.fillStyle = "#0b140e"; ctx.fillRect(0, 0, viewW, viewH); return; }
   const size = TS * scale;
@@ -858,26 +1017,40 @@ function render(now) {
     px = anim.fromX + (S.player.x - anim.fromX) * k;
     py = anim.fromY + (S.player.y - anim.fromY) * k;
   }
-  let camX = px * size + size / 2 - viewW / 2, camY = py * size + size / 2 - viewH / 2;
-  if (now < shakeUntil) { camX += (Math.random() - 0.5) * scale * 3; camY += (Math.random() - 0.5) * scale * 3; }
+  let camX = Math.round(px * size + size / 2 - viewW / 2), camY = Math.round(py * size + size / 2 - viewH / 2);
+  if (now < shakeUntil) { camX += Math.round((Math.random() - 0.5) * scale * 3); camY += Math.round((Math.random() - 0.5) * scale * 3); }
+  const sx = (wx) => Math.round(wx * size - camX), sy = (wy) => Math.round(wy * size - camY);
   const x0 = Math.floor(camX / size) - 1, y0 = Math.floor(camY / size) - 1;
-  const cols = Math.ceil(viewW / size) + 3, rows = Math.ceil(viewH / size) + 3;
+  const cols = Math.ceil(viewW / size) + 3, rows = Math.ceil(viewH / size) + 4;
   const frame = Math.floor(now / 500) % 2;
   ctx.fillStyle = "#2a6fb5";
   ctx.fillRect(0, 0, viewW, viewH);
-  const fires = [];
+  const fires = [], objects = [];
+
+  // 1) Suelo.
   for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
     const tx = x0 + i, ty = y0 + j, t = tileAt(tx, ty);
-    const art = TILE_ART[t];
-    const dx = Math.round(tx * size - camX), dy = Math.round(ty * size - camY);
+    const dx = sx(tx), dy = sy(ty);
+    if (t === T.TREE) {
+      // Los árboles se dibujan después, por profundidad; aquí solo el césped de debajo.
+      ctx.drawImage(GROUND_VARIANTS[T.GRASS][hash(tx, ty) % 4], dx, dy, size, size);
+      objects.push({ y: ty + 1, kind: "tree", tx, ty });
+      continue;
+    }
+    const variants = GROUND_VARIANTS[t];
     if (t === T.TALL) {
-      // La hierba alta se mece un poco.
-      ctx.drawImage(TILE_ART[T.GRASS][0], dx, dy, size, size);
-      const sway = Math.round(Math.sin(now / 420 + tx * 0.9 + ty * 0.5) * scale * 0.6);
-      ctx.drawImage(art[0], dx + sway, dy, size, size);
-    } else ctx.drawImage(art[art.length > 1 ? frame : 0], dx, dy, size, size);
+      ctx.drawImage(GROUND_VARIANTS[T.GRASS][0], dx, dy, size, size);
+      const sway = Math.round(Math.sin(now / 420 + tx * 0.9 + ty * 0.5) * scale * (raining() ? 1.1 : 0.6));
+      ctx.drawImage(variants[hash(tx, ty) % 2], dx + sway, dy, size, size);
+    } else if (variants) {
+      const h = hash(tx, ty);
+      ctx.drawImage(variants[t === T.GRASS ? (h % 7 < 3 ? 0 : 1 + (h % 4)) % variants.length : h % variants.length], dx, dy, size, size);
+    } else {
+      const art = TILE_ART[t];
+      ctx.drawImage(art[art.length > 1 ? frame : 0], dx, dy, size, size);
+    }
     if (t === T.WATER || t === T.DEEP) {
-      // Espuma en la orilla.
+      // Espuma en la orilla y brillos en el agua.
       ctx.fillStyle = "#e8f7ffb0";
       const land = (xx, yy) => { const n = tileAt(xx, yy); return n !== T.WATER && n !== T.DEEP; };
       const w = Math.max(1, scale);
@@ -885,67 +1058,148 @@ function render(now) {
       if (land(tx, ty + 1)) ctx.fillRect(dx, dy + size - w, size, w);
       if (land(tx - 1, ty)) ctx.fillRect(dx, dy, w, size);
       if (land(tx + 1, ty)) ctx.fillRect(dx + size - w, dy, w, size);
-    } else if (t === T.TREE || t === T.STONE || t === T.BRICK || t === T.PLANKS) {
-      // Sombra suave debajo de los bloques altos.
+      if (hash(tx, ty, Math.floor(now / 350)) % 19 === 0) {
+        ctx.fillStyle = "#ffffffd0";
+        const h = hash(tx, ty, 3);
+        ctx.fillRect(dx + (h % 12) * scale, dy + ((h >> 4) % 12) * scale, scale * 2, scale);
+      }
+    } else if (isRock(t)) {
+      // Montaña con relieve: borde de luz arriba y acantilado delante.
+      if (!isRock(tileAt(tx, ty - 1))) { ctx.fillStyle = "#ffffff30"; ctx.fillRect(dx, dy, size, scale); }
+      if (!isRock(tileAt(tx, ty + 1))) {
+        const fh = Math.round(size * 0.38);
+        ctx.fillStyle = "#3f3f46"; ctx.fillRect(dx, dy + size - fh, size, fh);
+        ctx.fillStyle = "#2c2c33";
+        for (let k = 2; k < 16; k += 5) ctx.fillRect(dx + ((k + hash(tx, ty) % 3) * scale), dy + size - fh, scale, fh);
+        ctx.fillStyle = "#00000033"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.22));
+      }
+    } else if (t === T.BRICK || t === T.PLANKS) {
       if (WALKABLE.has(tileAt(tx, ty + 1))) { ctx.fillStyle = "#0000002a"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.18)); }
     }
-    if (t === T.FIRE) fires.push([dx + size / 2, dy + size / 2]);
-    if (t === T.ALTAR) fires.push([dx + size / 2, dy + size / 2]);
+    if (t === T.FIRE || t === T.ALTAR) fires.push([dx + size / 2, dy + size / 2]);
+  }
+
+  // Sombras de las nubes.
+  if (!isNight()) {
+    for (const c of amb.clouds) {
+      const cx = sx(c.x), cy = sy(c.y), r = c.r * size;
+      if (cx < -r || cy < -r || cx > viewW + r || cy > viewH + r) continue;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, "rgba(10,20,40,.13)"); g.addColorStop(1, "rgba(10,20,40,0)");
+      ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+  }
+  // Salpicaduras de lluvia.
+  for (const sp of amb.splashes) {
+    ctx.strokeStyle = `rgba(220,235,255,${0.6 - sp.t * 1.6})`;
+    ctx.lineWidth = Math.max(1, scale / 2);
+    ctx.beginPath(); ctx.ellipse(sx(sp.x), sy(sp.y), size * 0.12 * (1 + sp.t * 4), size * 0.05 * (1 + sp.t * 4), 0, 0, Math.PI * 2); ctx.stroke();
   }
   // Grietas en el bloque que se está rompiendo.
   if (mining.hits > 0) {
-    const dx = Math.round(mining.x * size - camX), dy = Math.round(mining.y * size - camY);
-    ctx.fillStyle = "#0008";
+    const dx = sx(mining.x), dy = sy(mining.y);
+    ctx.fillStyle = "#0009";
     const k = mining.hits;
     ctx.fillRect(dx + size * 0.3, dy + size * 0.2, scale, size * 0.25 * k);
     ctx.fillRect(dx + size * 0.55, dy + size * 0.45, size * 0.18 * k, scale);
     ctx.fillRect(dx + size * 0.2, dy + size * 0.65, size * 0.12 * k, scale);
   }
-  // Casilla de delante.
+  // Casilla de delante (esquinas, más discreto que un marco).
   const f = facing();
-  ctx.strokeStyle = "#ffffffaa";
-  ctx.lineWidth = Math.max(1, scale / 2);
-  ctx.strokeRect(Math.round(f.x * size - camX) + 1, Math.round(f.y * size - camY) + 1, size - 2, size - 2);
-  // Criaturas que pasean.
+  {
+    const fx = sx(f.x), fy = sy(f.y), L = Math.round(size * 0.28), w = Math.max(2, scale);
+    ctx.fillStyle = `rgba(255,255,255,${0.55 + Math.sin(now / 200) * 0.2})`;
+    for (const [ax, ay, hx, hy] of [[fx, fy, 1, 1], [fx + size, fy, -1, 1], [fx, fy + size, 1, -1], [fx + size, fy + size, -1, -1]]) {
+      ctx.fillRect(hx > 0 ? ax : ax - L, hy > 0 ? ay : ay - w, L, w);
+      ctx.fillRect(hx > 0 ? ax : ax - w, hy > 0 ? ay : ay - L, w, L);
+    }
+  }
+
+  // 2) Objetos con profundidad: árboles, criaturas y jugador, ordenados por su base.
   for (const r of roamers) {
     const k = clamp((now - r.start) / 260, 0, 1);
-    const rx = (r.fromX + (r.x - r.fromX) * k) * size - camX, ry = (r.fromY + (r.y - r.fromY) * k) * size - camY;
-    if (rx < -size || ry < -size || rx > viewW || ry > viewH) continue;
-    const bob = Math.round(Math.abs(Math.sin(now / 200 + r.x)) * scale * 1.5);
-    ctx.fillStyle = "#0000003a";
-    ctx.beginPath(); ctx.ellipse(rx + size / 2, ry + size * 0.92, size * 0.32, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.save();
-    ctx.translate(Math.round(rx + size / 2), 0);
-    ctx.scale(r.dir, 1);
-    ctx.drawImage(monCanvas(r.mon.sp), -size * 0.48, Math.round(ry + size * 0.04 - bob), size * 0.96, size * 0.96);
-    ctx.restore();
+    objects.push({ y: r.fromY + (r.y - r.fromY) * k + 1, kind: "mon", r, x: r.fromX + (r.x - r.fromX) * k, yy: r.fromY + (r.y - r.fromY) * k });
   }
-  // Jugador.
-  const pf = PLAYER[S.player.dir][anim.moving ? 1 + (anim.step % 2) : 0];
-  const ppx = Math.round(px * size - camX), ppy = Math.round(py * size - camY);
-  ctx.fillStyle = "#00000040";
-  ctx.beginPath(); ctx.ellipse(ppx + size / 2, ppy + size * 0.96, size * 0.3, size * 0.09, 0, 0, Math.PI * 2); ctx.fill();
-  const tallUnder = tileAt(S.player.x, S.player.y) === T.TALL && !anim.moving;
-  ctx.drawImage(pf, 0, 0, TS, tallUnder ? 11 : TS, ppx, ppy, size, tallUnder ? size * 11 / 16 : size);
-  // Partículas y textos flotantes.
+  objects.push({ y: py + 1.001, kind: "player" });
+  objects.sort((a, b) => a.y - b.y);
+  const ppx = sx(px), ppy = sy(py);
+  for (const o of objects) {
+    if (o.kind === "tree") {
+      const w = size * 1.7, dx = sx(o.tx) + size / 2 - w / 2, dy = sy(o.ty) + size - w;
+      if (dx > viewW || dy > viewH || dx + w < 0 || dy + w < 0) continue;
+      // Si el jugador está detrás de la copa, se vuelve un poco transparente.
+      const behind = S.player.y < o.ty && S.player.y >= o.ty - 1 && Math.abs(S.player.x - o.tx) <= 1;
+      ctx.fillStyle = "#0000002e";
+      ctx.beginPath(); ctx.ellipse(sx(o.tx) + size / 2, sy(o.ty) + size * 0.92, size * 0.55, size * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+      if (behind) ctx.globalAlpha = 0.55;
+      const sway = raining() ? Math.sin(now / 300 + o.tx) * scale * 0.8 : Math.sin(now / 900 + o.tx * 1.7) * scale * 0.4;
+      ctx.drawImage(TREES[treeVariant(o.tx, o.ty)], Math.round(dx + sway), Math.round(dy), Math.round(w), Math.round(w));
+      ctx.globalAlpha = 1;
+    } else if (o.kind === "mon") {
+      const rx = sx(o.x), ry = sy(o.yy);
+      if (rx < -size || ry < -size || rx > viewW || ry > viewH) continue;
+      const bob = Math.round(Math.abs(Math.sin(now / 200 + o.r.x)) * scale * 1.5);
+      ctx.fillStyle = "#0000003a";
+      ctx.beginPath(); ctx.ellipse(rx + size / 2, ry + size * 0.92, size * 0.32, size * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.translate(Math.round(rx + size / 2), 0);
+      ctx.scale(o.r.dir, 1);
+      ctx.drawImage(monCanvas(o.r.mon.sp), -size * 0.48, Math.round(ry + size * 0.04 - bob), size * 0.96, size * 0.96);
+      ctx.restore();
+    } else {
+      const pf = PLAYER[S.player.dir][anim.moving ? 1 + (anim.step % 2) : 0];
+      ctx.fillStyle = "#00000040";
+      ctx.beginPath(); ctx.ellipse(ppx + size / 2, ppy + size * 0.96, size * 0.3, size * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+      const tallUnder = tileAt(S.player.x, S.player.y) === T.TALL && !anim.moving;
+      const hop = anim.moving ? Math.round(Math.abs(Math.sin(((now - anim.start) / STEP_MS) * Math.PI)) * scale) : 0;
+      ctx.drawImage(pf, 0, 0, TS, tallUnder ? 11 : TS, ppx, ppy - hop, size, tallUnder ? size * 11 / 16 : size);
+    }
+  }
+
+  // Hojas que caen, partículas y textos flotantes.
+  for (const l of amb.leaves) {
+    ctx.globalAlpha = clamp(2.2 - l.t, 0, 1);
+    ctx.fillStyle = l.color;
+    ctx.fillRect(sx(l.x), sy(l.y), scale * 2, scale);
+  }
+  ctx.globalAlpha = 1;
   for (const p of particles) {
     ctx.globalAlpha = 1 - p.life / p.max;
     ctx.fillStyle = p.color;
-    ctx.fillRect(Math.round(p.x * size - camX), Math.round(p.y * size - camY), scale * 2, scale * 2);
+    ctx.fillRect(sx(p.x), sy(p.y), scale * 2, scale * 2);
   }
   ctx.globalAlpha = 1;
-  if (floaters.length) {
-    ctx.font = `800 ${Math.round(size * 0.32)}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    for (const f of floaters) {
-      const fx = f.x * size - camX, fy = (f.y - f.life * 0.8) * size - camY;
-      ctx.globalAlpha = clamp(1.4 - f.life * 1.3, 0, 1);
-      ctx.fillStyle = "#000"; ctx.fillText(f.text, fx + scale, fy + scale);
-      ctx.fillStyle = "#fff"; ctx.fillText(f.text, fx, fy);
-    }
-    ctx.globalAlpha = 1;
+  // Mariposas (de día).
+  for (const b of amb.bugs) {
+    if (b.night) continue;
+    const bx = sx(b.x), by = sy(b.y), flap = Math.sin(now / 70 + b.a * 5) > 0;
+    ctx.fillStyle = b.color;
+    ctx.fillRect(bx - scale * (flap ? 2 : 1), by, scale * (flap ? 2 : 1), scale * 2);
+    ctx.fillRect(bx + scale, by, scale * (flap ? 2 : 1), scale * 2);
+    ctx.fillStyle = "#2a2a2a"; ctx.fillRect(bx, by, scale, scale * 2);
   }
-  // Noche: oscuridad con luz alrededor del jugador y de las hogueras.
+
+  // Lluvia: cielo gris y gotas.
+  if (raining()) {
+    ctx.fillStyle = "rgba(40,55,80,.3)";
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.strokeStyle = "rgba(210,228,255,.75)";
+    ctx.lineWidth = Math.max(2, scale * 0.7);
+    ctx.beginPath();
+    for (const d of amb.drops) {
+      const x = d.x * viewW, y = d.y * viewH;
+      ctx.moveTo(x, y); ctx.lineTo(x - size * 0.12, y + size * 0.4);
+    }
+    ctx.stroke();
+  }
+  // Amanecer y atardecer: luz cálida.
+  const warm = dawnDusk();
+  if (warm > 0) {
+    ctx.fillStyle = `rgba(255,140,60,${warm * 0.2})`;
+    ctx.fillRect(0, 0, viewW, viewH);
+  }
+
+  // Noche: oscuridad con luz alrededor del jugador, las hogueras y las luciérnagas.
   const dark = darkness();
   if (dark > 0) {
     if (!render.night) render.night = document.createElement("canvas");
@@ -971,10 +1225,32 @@ function render(now) {
       g.addColorStop(0, "rgba(255,150,40,.25)"); g.addColorStop(1, "rgba(255,150,40,0)");
       ctx.fillStyle = g; ctx.fillRect(x - size * 2.5, y - size * 2.5, size * 5, size * 5);
     }
+    // Luciérnagas.
+    for (const b of amb.bugs) {
+      if (!b.night) continue;
+      const bx = sx(b.x), by = sy(b.y), a = 0.35 + Math.sin(now / 300 + b.a * 4) * 0.35;
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, size * 0.45);
+      g.addColorStop(0, `rgba(210,255,120,${a})`); g.addColorStop(1, "rgba(210,255,120,0)");
+      ctx.fillStyle = g; ctx.fillRect(bx - size * 0.45, by - size * 0.45, size * 0.9, size * 0.9);
+      ctx.fillStyle = `rgba(240,255,200,${a + 0.3})`; ctx.fillRect(bx, by, scale, scale);
+    }
     ctx.globalCompositeOperation = "source-over";
   }
+  // Textos flotantes por encima de todo.
+  if (floaters.length) {
+    ctx.font = `800 ${Math.round(size * 0.32)}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    for (const fl of floaters) {
+      const fx = fl.x * size - camX, fy = (fl.y - fl.life * 0.8) * size - camY;
+      ctx.globalAlpha = clamp(1.4 - fl.life * 1.3, 0, 1);
+      ctx.fillStyle = "#000"; ctx.fillText(fl.text, fx + scale, fy + scale);
+      ctx.fillStyle = "#fff"; ctx.fillText(fl.text, fx, fy);
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.drawImage(vignette(), 0, 0);
   // Reloj (y música de día o de noche).
-  const label = (isNight() ? "🌙 Noche " : "☀️ Día ") + S.day;
+  const label = (isNight() ? "🌙 Noche " : "☀️ Día ") + S.day + (raining() ? " 🌧️" : "");
   if (render.label !== label) {
     $("#clock").textContent = label;
     render.label = label;
@@ -1011,6 +1287,8 @@ function updateMovement(now) {
   if (!WALKABLE.has(tileAt(nx, ny))) return;
   anim.fromX = S.player.x; anim.fromY = S.player.y;
   anim.start = now; anim.moving = true; anim.step++;
+  const under = tileAt(S.player.x, S.player.y);
+  if (under === T.SAND || under === T.DIRT) for (let i = 0; i < 3; i++) particles.push({ x: S.player.x + 0.5, y: S.player.y + 0.92, vx: (Math.random() - 0.5) * 1.5, vy: -0.6 - Math.random(), life: 0, max: 0.35, color: under === T.SAND ? "#f3e2a6" : "#a07c55" });
   S.player.x = nx; S.player.y = ny;
   mining.hits = 0;
 }
@@ -1794,6 +2072,27 @@ function start() {
   renderQuest();
   playTheme(isNight() ? "night" : "day");
 }
+
+/* ---------- Sin zoom del navegador; doble toque = zoom de la cámara ---------- */
+
+// iOS ignora user-scalable=no: se bloquea a mano el doble toque y el pellizco.
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest(".panel-body, .intro-body, .battle-box")) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, (e) => e.preventDefault());
+document.addEventListener("dblclick", (e) => e.preventDefault());
+
+let lastTap = { t: 0, x: 0, y: 0 };
+canvas.addEventListener("pointerdown", (e) => {
+  const now = performance.now();
+  if (now - lastTap.t < 330 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 45) {
+    lastTap.t = 0;
+    if (!modalOpen()) cycleZoom();
+  } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+});
 
 addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") save(); });
 addEventListener("pagehide", save);

@@ -237,3 +237,6 @@ button { font: inherit; color: inherit; }
 }
 @keyframes dmg { from { opacity: 1; transform: translate(-50%, 10px) scale(.6); } 30% { transform: translate(-50%, -14px) scale(1.15); } to { opacity: 0; transform: translate(-50%, -40px); } }
 .mv-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; border: 2px solid #2b3a2d; vertical-align: middle; }
+
+/* Botones: sin zoom por doble toque (iPhone). */
+button, a, .slot, .row-card, .bbtn, .starter, .quest-pill { touch-action: manipulation; }
