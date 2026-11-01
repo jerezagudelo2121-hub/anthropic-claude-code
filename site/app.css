@@ -525,3 +525,6 @@ body.has-bg { --console-bg: linear-gradient(180deg, #0000004d, #00000080), var(-
 .game-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .game-link-text small { color: #c9e6c6; font-size: 13px; }
 .game-link-go { flex: none; font-weight: 800; padding: 8px 12px; border-radius: 12px; background: #6cd36b; color: #08240c; }
+
+/* Botones: sin zoom por doble toque (iPhone). */
+button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-action: manipulation; }

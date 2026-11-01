@@ -45,6 +45,10 @@ coleccionables, con criaturas, nombres y gráficos propios (todo dibujado con c�
 - Criaturas que **pasean por el mapa**, **mapa** que se descubre al explorar, chispas al romper
   bloques, espuma en la orilla y hierba que se mece.
 - **Sonido y música** sintetizados con WebAudio (sin archivos), con opción para quitarlos.
+- Mundo con más detalle: árboles grandes (roble, pino y frutal) con profundidad, montaña con relieve
+  y acantilados, variantes del suelo, mariposas, luciérnagas, hojas que caen, sombras de nubes,
+  lluvia algunos días y luz cálida al amanecer y al atardecer.
+- **Doble toque en el mapa** para alejar o acercar la cámara (y sin zoom accidental del navegador).
 
 ## Cómo jugar en el iPhone
 
