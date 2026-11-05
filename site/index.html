@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>GBA Web</title>
-<meta name="description" content="Emulador de Game Boy Advance en el navegador, con multijugador online.">
+<meta name="description" content="Emulador de Game Boy Advance y Super Nintendo en el navegador, con multijugador online.">
 <meta name="theme-color" content="#120f24">
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -23,7 +23,7 @@
 <section id="home" class="view">
   <div class="home-card">
     <div class="logo">GBA<span>web</span></div>
-    <p class="tagline">Emulador de Game Boy Advance en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
+    <p class="tagline">Game Boy Advance y Super Nintendo en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
 
     <div id="invite-banner" class="banner" hidden></div>
 
@@ -60,7 +60,7 @@
       <input id="rom-input" type="file" multiple hidden>
       <input id="lib-search" class="search" type="search" placeholder="Buscar juego…" aria-label="Buscar juego" hidden>
       <div id="lib-empty" class="lib-empty">
-        <p>Aún no tienes juegos. Añade tus ROMs <b>.gba</b> o <b>.zip</b> (puedes elegir varias a la vez) y se quedarán guardadas aquí.</p>
+        <p>Aún no tienes juegos. Añade tus ROMs <b>.gba</b>, de Super Nintendo (<b>.sfc</b>, <b>.smc</b>) o <b>.zip</b> (puedes elegir varias a la vez) y se quedarán guardadas aquí.</p>
         <label class="btn primary big" for="rom-input">🎮 Añadir juegos</label>
       </div>
       <div id="lib-grid" class="lib-grid"></div>
@@ -131,6 +131,8 @@
       <div class="arm up"></div><div class="arm down"></div><div class="arm left"></div><div class="arm right"></div><div class="hub"></div>
     </div>
     <div class="ab">
+      <div class="face x" data-btn="X">X</div>
+      <div class="face y" data-btn="Y">Y</div>
       <div class="face b" data-btn="B">B</div>
       <div class="face a" data-btn="A">A</div>
     </div>

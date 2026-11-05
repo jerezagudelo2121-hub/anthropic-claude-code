@@ -1,10 +1,12 @@
 "use strict";
 
-/* Motor GBA: ejecuta gpSP (WebAssembly) y se encarga de imagen, sonido y ritmo. */
+/* Motor: ejecuta el núcleo (gpSP para GBA, snes9x para Super Nintendo) en WebAssembly
+ * y se encarga de imagen, sonido y ritmo. */
 
 class GbaEngine {
-  static async create(wasmUrl, canvas) {
+  static async create(wasmUrl, canvas, system = "gba") {
     const engine = new GbaEngine(canvas);
+    engine.system = system;
     await engine.instantiate(wasmUrl);
     return engine;
   }
@@ -21,6 +23,8 @@ class GbaEngine {
       this.canvas = fresh;
       this.renderer = new GbaRenderer(fresh, true);
     }
+    this.w = 240;
+    this.h = 160;
     this.rgba = new Uint8ClampedArray(240 * 160 * 4);
     this.pixels = new Uint32Array(this.rgba.buffer);
     this.palette = new Uint32Array(65536);
@@ -29,6 +33,9 @@ class GbaEngine {
       this.palette[c] = 0xff000000 | (b << 16) | (g << 8) | r;
     }
     this.buttons = 0;
+    this.buttons2 = 0;       // segundo mando (Super Nintendo)
+    this.lockstep = null;    // () => [mando1, mando2] | null (juego online sincronizado)
+    this.frame = 0;
     this.running = false;
     this.speed = 1;          // 1 = normal; 2, 3, 4, 8 = avance rápido
     this.muted = false;
@@ -82,6 +89,13 @@ class GbaEngine {
   }
 
   load(rom, bios) {
+    if (this.system === "snes") {
+      const ptr = this.copyIn(rom); // el núcleo usa la ROM directamente desde la memoria
+      if (!this.ex.fe_load_mem(ptr, rom.length)) return false;
+      this.fps = this.ex.fe_fps();
+      this.sampleRate = this.ex.fe_sample_rate();
+      return true;
+    }
     if (bios) this.registerFile("/sys/gba_bios.bin", bios);
     this.registerFile("/rom.gba", rom);
     if (!this.ex.fe_load(this.cstr("/rom.gba"))) return false;
@@ -112,7 +126,13 @@ class GbaEngine {
       const frames = Math.min(Math.floor(this.debt), 4 * speed);
       // Si el móvil no llega a la velocidad pedida, va lo más rápido que puede sin acumular retraso.
       this.debt = Math.min(this.debt - frames, 4 * speed);
-      for (let i = 0; i < frames; i++) this.runFrame(i === frames - 1);
+      for (let i = 0; i < frames; i++) {
+        if (!this.runFrame(i === frames - 1)) {
+          // Online: falta el mando de tu amigo para este fotograma; se espera sin acumular retraso.
+          this.debt = Math.min(this.debt, 1);
+          break;
+        }
+      }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -123,26 +143,68 @@ class GbaEngine {
   }
 
   runFrame(draw) {
-    this.deliverPackets();
-    this.ex.fe_set_buttons(this.buttons);
+    if (this.onFrame) this.onFrame();
+    if (this.lockstep) {
+      const input = this.lockstep();
+      if (!input) return false;
+      this.ex.fe_set_buttons(input[0]);
+      this.ex.fe_set_buttons2(input[1]);
+    } else {
+      this.deliverPackets();
+      this.ex.fe_set_buttons(this.buttons);
+      if (this.ex.fe_set_buttons2) this.ex.fe_set_buttons2(this.buttons2);
+    }
     this.ex.fe_run();
+    this.frame++;
     this.pushAudio();
     if (draw) this.draw();
-    if (this.onFrame) this.onFrame();
+    return true;
   }
 
   draw() {
-    const fb = new Uint16Array(this.ex.memory.buffer, this.ex.fe_framebuffer(), 240 * 160);
+    const w = this.ex.fe_width ? this.ex.fe_width() : 240;
+    const h = this.ex.fe_height ? this.ex.fe_height() : 160;
+    if (w !== this.w || h !== this.h || this.rgba.length !== w * h * 4) {
+      this.w = w;
+      this.h = h;
+      this.rgba = new Uint8ClampedArray(w * h * 4);
+      this.pixels = new Uint32Array(this.rgba.buffer);
+      this.renderer.setSize(w, h);
+    }
+    const n = w * h;
+    const fb = new Uint16Array(this.ex.memory.buffer, this.ex.fe_framebuffer(), n);
     const pal = this.palette, px = this.pixels;
-    for (let i = 0; i < 38400; i++) px[i] = pal[fb[i]];
+    for (let i = 0; i < n; i++) px[i] = pal[fb[i]];
     this.renderer.draw(this.rgba);
+  }
+
+  // Huella de la memoria del juego: sirve para comprobar que las dos consolas van iguales.
+  ramHash() {
+    if (!this.ex.fe_ram_data) return 0;
+    const ram = new Int32Array(this.ex.memory.buffer, this.ex.fe_ram_data(), this.ex.fe_ram_size() >> 2);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < ram.length; i++) h = Math.imul(h ^ ram[i], 16777619);
+    return h >>> 0;
   }
 
   // Captura sin filtros (para las portadas de la biblioteca).
   snapshot() {
-    const c = this.snapCanvas || (this.snapCanvas = Object.assign(document.createElement("canvas"), { width: 240, height: 160 }));
-    const ctx = c.getContext("2d");
-    ctx.putImageData(new ImageData(this.rgba.slice(), 240, 160), 0, 0);
+    const c = this.snapCanvas || (this.snapCanvas = document.createElement("canvas"));
+    const img = new ImageData(this.rgba.slice(), this.w, this.h);
+    if (this.system !== "snes") {
+      c.width = this.w;
+      c.height = this.h;
+      c.getContext("2d").putImageData(img, 0, 0);
+      return c;
+    }
+    // Super Nintendo: se recorta a 3:2 para que encaje con las portadas.
+    const tmp = Object.assign(document.createElement("canvas"), { width: this.w, height: this.h });
+    tmp.getContext("2d").putImageData(img, 0, 0);
+    c.width = 288;
+    c.height = 192;
+    const cropH = Math.round(this.h * 8 / 9); // se ve a 4:3; para 3:2 sobra 1/9 de alto
+    const sy = Math.max(0, (this.h - cropH) / 2);
+    c.getContext("2d").drawImage(tmp, 0, sy, this.w, cropH, 0, 0, 288, 192);
     return c;
   }
 
@@ -271,16 +333,17 @@ class GbaEngine {
 
   /* ---------- Adaptador inalámbrico (netpacket) ---------- */
 
-  netStart(clientId) { this.netQueue.length = 0; this.ex.fe_net_start(clientId); }
-  netStop() { this.netQueue.length = 0; this.ex.fe_net_stop(); }
-  netConnected(clientId) { return !!this.ex.fe_net_connected(clientId); }
-  netDisconnected(clientId) { this.ex.fe_net_disconnected(clientId); }
+  netStart(clientId) { this.netQueue.length = 0; if (this.ex.fe_net_start) this.ex.fe_net_start(clientId); }
+  netStop() { this.netQueue.length = 0; if (this.ex.fe_net_stop) this.ex.fe_net_stop(); }
+  netConnected(clientId) { return this.ex.fe_net_connected ? !!this.ex.fe_net_connected(clientId) : true; }
+  netDisconnected(clientId) { if (this.ex.fe_net_disconnected) this.ex.fe_net_disconnected(clientId); }
 
   netReceive(clientId, data) {
     this.netQueue.push({ client: clientId, data });
   }
 
   deliverPackets() {
+    if (!this.ex.fe_net_receive) return;
     while (this.netQueue.length) {
       const { client, data } = this.netQueue.shift();
       const ptr = this.copyIn(data);

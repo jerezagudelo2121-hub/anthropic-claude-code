@@ -26,6 +26,12 @@ Incluye **multijugador online** para jugar con un amigo.
 - **📂 Varias partidas por juego**: cada partida tiene su propio guardado y sus propias ranuras de
   guardado rápido. Crea, renombra o borra partidas desde el ⋯ del juego o ☰ → Opciones → 📂 Partidas.
 - BIOS de GBA opcional (`gba_bios.bin`).
+- **Super Nintendo** (`.sfc`, `.smc`): con el núcleo snes9x2005 y los botones X, Y, A, B en rombo.
+  **Online a dos mandos**: tú eres el mando 1 y tu amigo el mando 2, jugando la misma partida a la
+  vez (en Super Mario World, Mario y Luigi por turnos; en juegos como Super Mario Kart o Super
+  Bomberman, los dos a la vez). Los dos móviles ejecutan el juego y solo se envían los botones;
+  si alguna vez se descuadran, el anfitrión reenvía su partida sola. El invitado juega en la partida
+  del anfitrión: su propio guardado no se toca y al salir vuelve a él.
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.
 
@@ -138,12 +144,18 @@ Para probarlo en local: `cd site && python3 -m http.server 8000` y abre http://l
 - Multijugador "Jugar juntos": los paquetes *netpacket* de gpSP viajan por un canal de datos
   WebRTC. El anfitrión es el cliente 0 y reenvía los mensajes entre invitados.
 
-Para recompilar el núcleo: `wasm/build.sh` (necesita `clang`, `wasm-ld`, `git` y `python3`).
+- `site/snes/snes9x.wasm` — snes9x2005 compilado igual con `wasm/build_snes.sh` y
+  `wasm/frontend_snes.c` (dos mandos). Online a dos mandos: modo "sync" en `app.js` (se envían
+  los botones con 4 fotogramas de margen y cada ~2 s se compara una huella de la memoria).
+
+Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan `clang`, `wasm-ld`, `git` y `python3`).
 
 ## Créditos y licencias
 
 - [gpSP](https://github.com/libretro/gpsp) (GPL-2.0), commit `5819380`, compilado en
   `site/gpsp/gpsp.wasm`. Licencia en `site/gpsp/COPYING`; el código fuente se obtiene con `wasm/build.sh`.
+- [snes9x2005](https://github.com/libretro/snes9x2005) (licencia de Snes9x, uso no comercial),
+  commit `a79dfe9`, compilado en `site/snes/snes9x.wasm`. Licencia en `site/snes/COPYRIGHT`.
 - [PeerJS](https://peerjs.com) 1.5.5 (MIT) — `site/vendor/peerjs`
 - [fflate](https://github.com/101arrowz/fflate) 0.8.2 (MIT) — `site/vendor/fflate`, para abrir ROMs `.zip`.
 
