@@ -168,7 +168,7 @@ function renderLibrary() {
     info.className = "meta-info";
     info.innerHTML = "<b></b><small></small>";
     info.firstChild.textContent = title;
-    info.lastChild.textContent = rom.lastPlayed ? "Jugado " + timeAgo(rom.lastPlayed) : "Nuevo";
+    info.lastChild.textContent = (rom.lastPlayed ? "Jugado " + timeAgo(rom.lastPlayed) : "Nuevo") + (partidas(rom).length > 1 ? " · " + currentPartida(rom).name : "");
     const more = document.createElement("button");
     more.className = "more";
     more.textContent = "⋯";
@@ -219,9 +219,117 @@ async function updateRom(name, changes) {
   try { await db.put("roms", { ...rom, ...changes }); } catch (e) { console.warn(e); }
 }
 
-function playRom(rom) {
-  startGame(new File([rom.data], rom.name), rom);
+/* ---------- Partidas: varias por juego, cada una con su guardado y sus ranuras ---------- */
+
+function partidas(rom) {
+  return rom.saves && rom.saves.length ? rom.saves : [{ id: "1", name: "Partida 1" }];
 }
+function currentPartida(rom) {
+  const list = partidas(rom);
+  return list.find((p) => p.id === rom.current) || list[0];
+}
+// La partida 1 usa la clave de siempre, así las partidas guardadas de antes siguen ahí.
+function saveKeyFor(rom, id) {
+  return id === "1" ? baseName(rom.name) : `${baseName(rom.name)}#p${id}`;
+}
+
+function playRom(rom, pid) {
+  pid = pid || currentPartida(rom).id;
+  if (engine) {
+    // El motor no se puede reiniciar con otro juego: se guarda y se recarga la página.
+    persistSave();
+    try { sessionStorage.setItem("gbaweb-play", JSON.stringify({ name: rom.name, pid })); } catch (e) { /* sin almacenamiento */ }
+    return setTimeout(() => location.replace(location.pathname), 150);
+  }
+  startGame(new File([rom.data], rom.name), rom, pid);
+}
+
+let savesRom = null;
+
+async function openSaves(romOrName) {
+  const rom = typeof romOrName === "string" ? await safeGet("roms", romOrName) : romOrName;
+  if (!rom) return toast("No encuentro este juego en la biblioteca");
+  savesRom = rom;
+  $("#ss-title").textContent = "📂 " + romTitle(rom);
+  const list = $("#ss-list");
+  list.innerHTML = "";
+  const cur = currentPartida(rom);
+  for (const p of partidas(rom)) {
+    const hasSave = !!(await safeGet("saves", saveKeyFor(rom, p.id)));
+    const row = document.createElement("div");
+    row.className = "save-row" + (p.id === cur.id ? " current" : "");
+    row.innerHTML = `<div class="save-info"><b></b><small></small></div>
+      <button class="btn primary" data-sv="play">▶</button>
+      <button class="btn icon" data-sv="rename" aria-label="Renombrar">✏️</button>
+      <button class="btn icon" data-sv="delete" aria-label="Borrar">🗑️</button>`;
+    row.querySelector("b").textContent = p.name + (p.id === cur.id ? " · actual" : "");
+    row.querySelector("small").textContent = (hasSave ? "Con progreso" : "Sin empezar") + (p.last ? " · jugada " + timeAgo(p.last) : "");
+    row.dataset.pid = p.id;
+    list.append(row);
+  }
+  $("#saves-sheet").hidden = false;
+}
+
+async function setPartidas(rom, saves, current) {
+  rom.saves = saves;
+  if (current) rom.current = current;
+  await updateRom(rom.name, { saves, current: rom.current });
+}
+
+$("#ss-close").onclick = () => ($("#saves-sheet").hidden = true);
+$("#saves-sheet").addEventListener("click", async (e) => {
+  if (e.target.id === "saves-sheet") return ($("#saves-sheet").hidden = true);
+  const btn = e.target.closest("[data-sv]");
+  if (!btn || !savesRom) return;
+  const rom = savesRom, pid = btn.closest(".save-row").dataset.pid;
+  const list = partidas(rom).map((p) => ({ ...p }));
+  const p = list.find((x) => x.id === pid);
+  if (btn.dataset.sv === "play") {
+    $("#saves-sheet").hidden = true;
+    $("#game-sheet").hidden = true;
+    closeMenu();
+    if (engine && libraryName === rom.name && saveKey === saveKeyFor(rom, pid)) return toast("Ya estás jugando esta partida");
+    await setPartidas(rom, list, pid);
+    return playRom(rom, pid);
+  }
+  if (btn.dataset.sv === "rename") {
+    const name = prompt("Nombre de la partida:", p.name);
+    if (!name || !name.trim()) return;
+    p.name = name.trim().slice(0, 30);
+    await setPartidas(rom, list);
+    return openSaves(rom);
+  }
+  if (btn.dataset.sv === "delete") {
+    if (engine && saveKey === saveKeyFor(rom, pid)) return toast("No puedes borrar la partida que estás jugando");
+    const only = list.length === 1;
+    if (!confirm(only ? `¿Borrar todo el progreso de «${p.name}»? Se empezará de cero.` : `¿Borrar «${p.name}» y todo su progreso?`)) return;
+    const key = saveKeyFor(rom, pid);
+    await db.del("saves", key).catch(() => {});
+    for (let slot = 1; slot <= SLOTS; slot++) await db.del("states", `${key}#${slot}`).catch(() => {});
+    if (!only) {
+      const rest = list.filter((x) => x.id !== pid);
+      await setPartidas(rom, rest, rom.current === pid ? rest[0].id : rom.current);
+    }
+    toast(only ? "Progreso borrado" : "Partida borrada");
+    return openSaves(rom);
+  }
+});
+
+$("#ss-new").onclick = async () => {
+  const rom = savesRom;
+  if (!rom) return;
+  const list = partidas(rom).map((p) => ({ ...p }));
+  const name = prompt("Nombre de la nueva partida:", `Partida ${list.length + 1}`);
+  if (name === null) return;
+  const id = Date.now().toString(36);
+  list.push({ id, name: (name.trim() || `Partida ${list.length + 1}`).slice(0, 30) });
+  await setPartidas(rom, list, id);
+  $("#saves-sheet").hidden = true;
+  $("#game-sheet").hidden = true;
+  closeMenu();
+  toast("Nueva partida creada");
+  playRom(rom, id);
+};
 
 function openGameSheet(rom) {
   sheetRom = rom;
@@ -230,6 +338,8 @@ function openGameSheet(rom) {
   parts.push(rom.lastPlayed ? "jugado " + timeAgo(rom.lastPlayed) : "sin jugar");
   $("#gs-info").textContent = parts.join(" · ");
   $("[data-gs=cover]").hidden = !rom.cover;
+  const n = partidas(rom).length;
+  $("#gs-saves-count").textContent = n > 1 ? `(${n})` : "";
   $("#game-sheet").hidden = false;
 }
 
@@ -242,6 +352,9 @@ $("#game-sheet").addEventListener("click", async (e) => {
     case "play":
       $("#game-sheet").hidden = true;
       return playRom(rom);
+    case "saves":
+      $("#game-sheet").hidden = true;
+      return openSaves(rom);
     case "rename": {
       const title = prompt("Nuevo nombre:", romTitle(rom));
       if (!title || !title.trim()) return;
@@ -249,11 +362,12 @@ $("#game-sheet").addEventListener("click", async (e) => {
       break;
     }
     case "export": {
-      const save = await safeGet("saves", baseName(rom.name));
-      if (!save) return toast("Este juego aún no tiene partida guardada");
+      const cur = currentPartida(rom);
+      const save = await safeGet("saves", saveKeyFor(rom, cur.id));
+      if (!save) return toast("Esta partida aún no tiene progreso guardado");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([save]));
-      a.download = baseName(rom.name) + ".sav";
+      a.download = baseName(rom.name) + (cur.id === "1" ? "" : " - " + cur.name) + ".sav";
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       return;
@@ -312,6 +426,7 @@ $("#join-form").addEventListener("submit", (e) => {
 
 let engine = null;
 let romName = "";
+let saveKey = "";     // clave del guardado de la partida en curso
 let lastSave = null;
 let libraryName = "";
 let lastCover = 0;
@@ -329,7 +444,7 @@ async function readRom(file) {
   return { data, name };
 }
 
-async function startGame(file, record) {
+async function startGame(file, record, pid) {
   if (engine) return location.reload();
   showView("console");
   document.body.classList.remove("guest");
@@ -338,13 +453,19 @@ async function startGame(file, record) {
     const rom = await readRom(file);
     romName = baseName(rom.name);
     libraryName = file.name;
-    $("#game-title").textContent = record ? romTitle(record) : romName;
-    updateRom(libraryName, { lastPlayed: Date.now() });
+    if (!record) record = await safeGet("roms", file.name);
+    const part = record ? (partidas(record).find((p) => p.id === pid) || currentPartida(record)) : { id: "1", name: "Partida 1" };
+    saveKey = record ? saveKeyFor(record, part.id) : romName;
+    $("#game-title").textContent = (record ? romTitle(record) : romName) + (record && partidas(record).length > 1 ? " · " + part.name : "");
+    if (record) {
+      const saves = partidas(record).map((p) => (p.id === part.id ? { ...p, last: Date.now() } : p));
+      updateRom(libraryName, { lastPlayed: Date.now(), saves, current: part.id });
+    }
     const bios = await safeGet("files", "bios");
     engine = await GbaEngine.create(CORE_URL, $("#game"));
     applyGraphics();
     if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
-    const saved = await safeGet("saves", romName);
+    const saved = await safeGet("saves", saveKey);
     if (saved) engine.setSave(saved);
     lastSave = engine.getSave();
     engine.onFrame = pollGamepads;
@@ -380,7 +501,7 @@ async function persistSave() {
   const data = engine.getSave();
   if (!data || sameBytes(data, lastSave)) return;
   lastSave = data;
-  try { await db.put("saves", data, romName); } catch (e) { console.warn(e); }
+  try { await db.put("saves", data, saveKey); } catch (e) { console.warn(e); }
 }
 
 // iOS puede cerrar la pestaña sin avisar: guarda al salir de la app.
@@ -748,7 +869,7 @@ $("#menu").addEventListener("click", (e) => {
   if (e.target.id === "menu") closeMenu();
 });
 
-const stateKey = (slot) => `${romName}#${slot}`;
+const stateKey = (slot) => `${saveKey}#${slot}`;
 
 async function renderSlots() {
   const wrap = $("#slots");
@@ -848,6 +969,10 @@ const actions = {
   "host-link": () => net.host("link"),
   "host-screen": () => net.host("screen"),
   "stop-net": () => net.stop(),
+  saves: () => {
+    if (!libraryName) return toast("Este juego no está en tu biblioteca");
+    openSaves(libraryName);
+  },
   "toggle-pad": () => {
     setPadHidden(!document.body.classList.contains("pad-hidden"));
     closeMenu();
@@ -1731,7 +1856,15 @@ for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEv
 
 /* ---------- Inicio ---------- */
 
-loadLibrary();
+loadLibrary().then(async () => {
+  // Cambio de partida o de juego desde dentro del emulador: se recargó la página para arrancarla.
+  let pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem("gbaweb-play") || "null"); sessionStorage.removeItem("gbaweb-play"); } catch (e) { /* nada */ }
+  if (pending) {
+    const rom = await safeGet("roms", pending.name);
+    if (rom) startGame(new File([rom.data], rom.name), rom, pending.pid);
+  }
+});
 renderBios();
 renderAndroid();
 applyGraphics();

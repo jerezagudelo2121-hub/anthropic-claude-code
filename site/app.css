@@ -528,3 +528,18 @@ body.has-bg { --console-bg: linear-gradient(180deg, #0000004d, #00000080), var(-
 
 /* Botones: sin zoom por doble toque (iPhone). */
 button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-action: manipulation; }
+
+/* ---------- Partidas ---------- */
+.save-list { display: flex; flex-direction: column; gap: 8px; }
+.save-row {
+  display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 16px;
+  background: var(--bg-2); border: 1px solid #ffffff10;
+}
+.save-row.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 6px 20px #8b6cff33; }
+.save-row .save-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.save-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.save-row small { color: var(--muted); font-size: 12px; }
+.save-row .btn { min-height: 38px; padding: 6px 12px; }
+.save-row .btn.icon { width: 38px; padding: 0; }
+#game-sheet .btn small { font-weight: 500; opacity: .75; }
+#saves-sheet { z-index: 12; }
