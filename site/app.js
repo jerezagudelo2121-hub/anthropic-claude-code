@@ -2,7 +2,9 @@
 
 /* GBA Web: interfaz para iPhone sobre gpSP (WebAssembly) + multijugador por WebRTC. */
 
-const CORE_URL = "gpsp/gpsp.wasm";
+const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
+const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
+const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -16,14 +18,14 @@ const MAX_GUESTS = 4; // el adaptador inalámbrico admite hasta 5 consolas
 const BROADCAST = 0xffff;
 
 // Bits del mando (RetroPad de libretro).
-const BUTTONS = { B: 0, SELECT: 2, START: 3, UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7, A: 8, L: 10, R: 11 };
+const BUTTONS = { B: 0, Y: 1, SELECT: 2, START: 3, UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7, A: 8, X: 9, L: 10, R: 11 };
 const KEYMAP = {
   ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT",
   KeyZ: "A", KeyX: "B", KeyQ: "L", KeyE: "R", KeyA: "L", KeyS: "R",
-  Enter: "START", KeyV: "SELECT", Backspace: "SELECT",
+  Enter: "START", KeyV: "SELECT", Backspace: "SELECT", KeyC: "Y", KeyD: "X",
 };
 // Mando Bluetooth (mapeo estándar): botón derecho = A, inferior = B.
-const PADMAP = { 1: "A", 0: "B", 4: "L", 5: "R", 6: "L", 7: "R", 8: "SELECT", 9: "START", 12: "UP", 13: "DOWN", 14: "LEFT", 15: "RIGHT" };
+const PADMAP = { 1: "A", 0: "B", 2: "Y", 3: "X", 4: "L", 5: "R", 6: "L", 7: "R", 8: "SELECT", 9: "START", 12: "UP", 13: "DOWN", 14: "LEFT", 15: "RIGHT" };
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -164,6 +166,7 @@ function renderLibrary() {
       cover.textContent = title.replace(/^pok[eé]mon\s*/i, "").slice(0, 2).toUpperCase() || "GBA";
     }
     cover.className = "cover";
+    const snes = (rom.system || systemOf(rom.name)) === "snes";
     const info = document.createElement("div");
     info.className = "meta-info";
     info.innerHTML = "<b></b><small></small>";
@@ -178,6 +181,12 @@ function renderLibrary() {
       openGameSheet(rom);
     };
     card.append(cover, info, more);
+    if (snes) {
+      const tag = document.createElement("span");
+      tag.className = "sys-tag";
+      tag.textContent = "SNES";
+      card.appendChild(tag);
+    }
     card.onclick = () => playRom(rom);
     grid.appendChild(card);
   }
@@ -425,6 +434,7 @@ $("#join-form").addEventListener("submit", (e) => {
 /* ---------- Arrancar el juego ---------- */
 
 let engine = null;
+let system = "gba";   // "gba" | "snes"
 let romName = "";
 let saveKey = "";     // clave del guardado de la partida en curso
 let lastSave = null;
@@ -435,13 +445,13 @@ async function readRom(file) {
   let data = new Uint8Array(await file.arrayBuffer());
   let name = file.name;
   if (data[0] === 0x50 && data[1] === 0x4b) { // .zip
-    const files = fflate.unzipSync(data, { filter: (f) => /\.(gba|agb|bin)$/i.test(f.name) });
+    const files = fflate.unzipSync(data, { filter: (f) => /\.(gba|agb|bin|sfc|smc|swc|fig)$/i.test(f.name) });
     const entry = Object.keys(files)[0];
-    if (!entry) throw new Error("El .zip no contiene ningún archivo .gba");
+    if (!entry) throw new Error("El .zip no contiene ningún juego (.gba, .sfc o .smc)");
     data = files[entry];
     name = entry.split("/").pop();
   }
-  return { data, name };
+  return { data, name, system: systemOf(name) };
 }
 
 async function startGame(file, record, pid) {
@@ -453,16 +463,18 @@ async function startGame(file, record, pid) {
     const rom = await readRom(file);
     romName = baseName(rom.name);
     libraryName = file.name;
+    system = rom.system;
+    document.body.classList.toggle("snes", system === "snes");
     if (!record) record = await safeGet("roms", file.name);
     const part = record ? (partidas(record).find((p) => p.id === pid) || currentPartida(record)) : { id: "1", name: "Partida 1" };
     saveKey = record ? saveKeyFor(record, part.id) : romName;
     $("#game-title").textContent = (record ? romTitle(record) : romName) + (record && partidas(record).length > 1 ? " · " + part.name : "");
     if (record) {
       const saves = partidas(record).map((p) => (p.id === part.id ? { ...p, last: Date.now() } : p));
-      updateRom(libraryName, { lastPlayed: Date.now(), saves, current: part.id });
+      updateRom(libraryName, { lastPlayed: Date.now(), saves, current: part.id, system });
     }
-    const bios = await safeGet("files", "bios");
-    engine = await GbaEngine.create(CORE_URL, $("#game"));
+    const bios = system === "gba" ? await safeGet("files", "bios") : null;
+    engine = await GbaEngine.create(CORES[system], $("#game"), system);
     applyGraphics();
     if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
     const saved = await safeGet("saves", saveKey);
@@ -496,7 +508,7 @@ function saveCover(force) {
 }
 
 async function persistSave() {
-  if (!engine) return;
+  if (!engine || sync.foreign) return; // jugando en la partida de tu amigo: tu guardado no se toca
   saveCover(false);
   const data = engine.getSave();
   if (!data || sameBytes(data, lastSave)) return;
@@ -649,8 +661,12 @@ let ffHold = false;
 let chosenSpeed = 1;
 
 function linkActive() {
-  return net.mode === "link" && (net.role === "host" || net.role === "guest");
+  return isRoomMode(net.mode) && (net.role === "host" || net.role === "guest");
 }
+
+// Modo de la sala "Jugar juntos": cable link (GBA) o dos mandos sincronizados (Super Nintendo).
+const isRoomMode = (mode) => mode === "link" || mode === "sync";
+const roomMode = () => (system === "snes" ? "sync" : "link");
 
 function ffAllowed() {
   return !net.role;
@@ -891,6 +907,7 @@ $("#slots").addEventListener("click", async (e) => {
   const loadSlot = e.target.dataset.load;
   try {
     if (saveSlot) {
+      if (sync.foreign) return toast("Estás jugando en la partida de tu amigo: guarda él", 3500);
       await db.put("states", { data: engine.saveState(), time: Date.now() }, stateKey(saveSlot));
       toast(`Guardado en la ranura ${saveSlot}`);
       renderSlots();
@@ -966,7 +983,7 @@ const actions = {
       toast("Tu móvil no permite girar desde aquí; gira el móvil directamente");
     }
   },
-  "host-link": () => net.host("link"),
+  "host-link": () => net.host(roomMode()),
   "host-screen": () => net.host("screen"),
   "stop-net": () => net.stop(),
   saves: () => {
@@ -979,7 +996,7 @@ const actions = {
   },
   share: () => {
     const url = net.inviteUrl();
-    const text = net.mode === "link"
+    const text = isRoomMode(net.mode)
       ? `¡Juguemos juntos a ${romName}! Abre el enlace y carga tu ROM. Código: ${net.code}`
       : `¡Mira mi partida de ${romName}! Código: ${net.code}`;
     if (navigator.share) navigator.share({ title: "GBA Web", text, url }).catch(() => {});
@@ -1036,6 +1053,201 @@ $("#guest-control").addEventListener("change", (e) => {
  * Modo "screen": el anfitrión transmite imagen y sonido; el invitado manda sus botones.
  */
 
+/* ---------- Dos mandos sincronizados (Super Nintendo) ----------
+ * Los dos móviles ejecutan el mismo juego y solo se envían los botones. Un fotograma se juega
+ * cuando están los mandos de los dos; el tuyo se manda SYNC_DELAY fotogramas antes para que
+ * llegue a tiempo. Al empezar, el anfitrión manda su partida (el estado completo) y, si alguna
+ * vez las dos consolas dejan de coincidir, la vuelve a mandar sola. */
+const SYNC_DELAY = 4;           // fotogramas de margen (~67 ms)
+const SYNC_CHECK_EVERY = 120;   // se comprueba que coinciden cada ~2 s
+const SYNC_CHUNK = 16000;
+const MSG_INPUT = 1, MSG_STATE = 2, MSG_HASH = 3;
+
+const sync = {
+  conn: null,
+  role: null,          // "host" (mando 1) | "guest" (mando 2)
+  active: false,
+  foreign: false,      // invitado: está jugando en la partida del anfitrión
+  epoch: 0,
+  frame: 0,            // siguiente fotograma a jugar
+  nextLocal: 0,        // siguiente fotograma para el que hay que mandar tu mando
+  local: new Map(),
+  remote: new Map(),
+  hashes: new Map(),
+  theirHashes: new Map(),
+  incoming: null,
+  waitingSince: 0,
+  lastResync: 0,
+
+  begin(conn, role) {
+    this.stop(true);
+    this.conn = conn;
+    this.role = role;
+    this.active = true;
+    this.local.clear();
+    this.remote.clear();
+    if (role === "guest") {
+      persistSave();
+      this.foreign = true;
+      engine.lockstep = () => null; // en pausa hasta recibir la partida
+      screenMsg("Recibiendo la partida de tu amigo…");
+    } else {
+      this.sendState(true);
+      engine.lockstep = () => this.step();
+    }
+  },
+
+  // Fotogramas iniciales: nadie ha pulsado nada todavía.
+  prefill(frame) {
+    this.frame = frame;
+    this.nextLocal = Math.max(this.nextLocal, frame + SYNC_DELAY);
+    for (let f = frame; f < frame + SYNC_DELAY; f++) {
+      if (!this.local.has(f)) this.local.set(f, 0);
+      if (!this.remote.has(f)) this.remote.set(f, 0);
+    }
+  },
+
+  send(bytes) {
+    if (this.conn && this.conn.open) this.conn.send(bytes.buffer);
+  },
+
+  sendState(fresh) {
+    this.epoch = (this.epoch + 1) & 0xff;
+    this.hashes.clear();
+    this.theirHashes.clear();
+    this.lastResync = Date.now();
+    if (fresh) {
+      this.nextLocal = 0;
+      this.prefill(0);
+    }
+    const state = fflate.deflateSync(engine.saveState(), { level: 1 });
+    for (let off = 0; off < state.length || off === 0; off += SYNC_CHUNK) {
+      const part = state.subarray(off, off + SYNC_CHUNK);
+      const msg = new Uint8Array(15 + part.length);
+      const dv = new DataView(msg.buffer);
+      msg[0] = MSG_STATE;
+      msg[1] = fresh ? 1 : 0;
+      msg[2] = this.epoch;
+      dv.setUint32(3, this.frame, true);
+      dv.setUint32(7, state.length, true);
+      dv.setUint32(11, off, true);
+      msg.set(part, 15);
+      this.send(msg);
+      if (!state.length) break;
+    }
+  },
+
+  onData(bytes) {
+    if (!this.active || !bytes.length) return;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (bytes[0] === MSG_INPUT) {
+      this.remote.set(dv.getUint32(1, true), dv.getUint16(5, true));
+    } else if (bytes[0] === MSG_HASH) {
+      if (bytes[1] !== this.epoch) return;
+      this.theirHashes.set(dv.getUint32(2, true), dv.getUint32(6, true));
+      this.compare(dv.getUint32(2, true));
+    } else if (bytes[0] === MSG_STATE && this.role === "guest") {
+      const fresh = bytes[1] & 1, epoch = bytes[2], frame = dv.getUint32(3, true);
+      const total = dv.getUint32(7, true), off = dv.getUint32(11, true);
+      if (!this.incoming || this.incoming.epoch !== epoch) this.incoming = { epoch, data: new Uint8Array(total), got: 0 };
+      this.incoming.data.set(bytes.subarray(15), off);
+      this.incoming.got += bytes.length - 15;
+      if (this.incoming.got < total) return;
+      const state = fflate.inflateSync(this.incoming.data);
+      this.incoming = null;
+      engine.loadState(state);
+      this.epoch = epoch;
+      this.hashes.clear();
+      this.theirHashes.clear();
+      if (fresh) {
+        this.nextLocal = 0;
+        this.prefill(frame);
+        screenMsg("");
+        engine.lockstep = () => this.step();
+      } else {
+        this.frame = frame;
+      }
+    }
+  },
+
+  // Comprueba que las dos consolas tienen la misma memoria; si no, el anfitrión reenvía su partida.
+  compare(frame) {
+    const mine = this.hashes.get(frame), theirs = this.theirHashes.get(frame);
+    if (mine === undefined || theirs === undefined) return;
+    this.hashes.delete(frame);
+    this.theirHashes.delete(frame);
+    if (mine !== theirs && this.role === "host" && Date.now() - this.lastResync > 3000) {
+      console.warn("Las consolas se han desincronizado en el fotograma", frame, "→ se reenvía la partida");
+      this.sendState(false);
+    }
+  },
+
+  step() {
+    const f = this.frame;
+    // Tu mando se manda por adelantado para el fotograma f + SYNC_DELAY.
+    while (this.nextLocal <= f + SYNC_DELAY) {
+      const n = this.nextLocal++;
+      const mask = engine.buttons & 0xffff;
+      this.local.set(n, mask);
+      const msg = new Uint8Array(7);
+      const dv = new DataView(msg.buffer);
+      msg[0] = MSG_INPUT;
+      dv.setUint32(1, n, true);
+      dv.setUint16(5, mask, true);
+      this.send(msg);
+    }
+    const mine = this.local.get(f), theirs = this.remote.get(f);
+    if (mine === undefined || theirs === undefined) {
+      if (!this.waitingSince) this.waitingSince = Date.now();
+      else if (Date.now() - this.waitingSince > 1500 && !this.waitMsg) {
+        this.waitMsg = true;
+        screenMsg("Esperando a tu amigo…");
+      }
+      return null;
+    }
+    if (this.waitMsg) screenMsg("");
+    this.waitingSince = 0;
+    this.waitMsg = false;
+    if (f && f % SYNC_CHECK_EVERY === 0 && !this.hashes.has(f)) {
+      const h = engine.ramHash();
+      this.hashes.set(f, h);
+      const msg = new Uint8Array(10);
+      const dv = new DataView(msg.buffer);
+      msg[0] = MSG_HASH;
+      msg[1] = this.epoch;
+      dv.setUint32(2, f, true);
+      dv.setUint32(6, h, true);
+      this.send(msg);
+      this.compare(f);
+      for (const k of this.hashes.keys()) if (k < f - SYNC_CHECK_EVERY * 10) this.hashes.delete(k);
+      for (const k of this.theirHashes.keys()) if (k < f - SYNC_CHECK_EVERY * 10) this.theirHashes.delete(k);
+    }
+    this.local.delete(f - 600);
+    this.remote.delete(f - 600);
+    this.frame = f + 1;
+    return this.role === "host" ? [mine, theirs] : [theirs, mine];
+  },
+
+  stop() {
+    if (!this.active) return;
+    this.active = false;
+    this.conn = null;
+    this.incoming = null;
+    this.local.clear();
+    this.remote.clear();
+    if (engine) engine.lockstep = null;
+    if (this.waitMsg || this.foreign) screenMsg("");
+    this.waitMsg = false;
+    this.waitingSince = 0;
+    if (this.foreign) {
+      // El invitado vuelve a su propia partida (sin guardar la del anfitrión).
+      screenMsg("Volviendo a tu partida…");
+      const rec = library.find((r) => r.name === libraryName);
+      setTimeout(() => (rec ? playRom(rec) : location.reload()), 1200);
+    }
+  },
+};
+
 const net = {
   role: null,   // "host" | "guest" (link) | "viewer" (screen)
   mode: null,   // "link" | "screen"
@@ -1075,7 +1287,9 @@ const net = {
     const isHost = this.role === "host";
     $("#mp-code-box").hidden = !isHost;
     $("#guest-control-row").hidden = !(isHost && this.mode === "screen");
-    $("#mp-mode").textContent = this.mode === "link"
+    $("#mp-mode").textContent = this.mode === "sync"
+      ? (isHost ? "Eres el mando 1. Invita a un amigo: será el mando 2 y jugaréis la misma partida a la vez." : "Estás en la partida de tu amigo con el mando 2. Lo que guardes lo guarda él.")
+      : this.mode === "link"
       ? (isHost ? "Eres el anfitrión. Invita a tus amigos (hasta 4) y, cuando estéis, invitaos desde el menú multijugador del juego." : "Estás en la sala de tu amigo. Ya podéis invitaros desde el menú multijugador del juego.")
       : "📺 Compartiendo pantalla.";
     renderLobby();
@@ -1153,6 +1367,7 @@ const net = {
       const who = this.names.get(id) || "Tu amigo";
       this.names.delete(id);
       if (this.mode === "link") engine.netDisconnected(id);
+      else if (this.mode === "sync") sync.stop();
       else {
         if (this.call) this.call.close();
         this.call = null;
@@ -1179,7 +1394,9 @@ const net = {
       this.sendJSON(conn, { t: "welcome", id });
       if (this.mode === "screen") this.call = this.peer.call(conn.peer, buildStream());
       setNetStatus(`👥 ${this.conns.size + 1} jugadores`, "ok");
-      toast(this.mode === "link" ? `¡${guestNick} ha entrado en la sala! Invitaos desde el menú multijugador del juego.` : `¡${guestNick} se ha unido!`, 5000);
+      toast(this.mode === "link" ? `¡${guestNick} ha entrado en la sala! Invitaos desde el menú multijugador del juego.`
+        : this.mode === "sync" ? `¡${guestNick} se ha unido con el mando 2!` : `¡${guestNick} se ha unido!`, 5000);
+      if (this.mode === "sync") sync.begin(conn, "host");
       this.updateRoster();
     };
     conn.on("open", () => {
@@ -1192,7 +1409,7 @@ const net = {
         const m = parseJSON(msg);
         if (!m) return;
         if (m.nick) guestNick = String(m.nick).slice(0, 20);
-        if (m.t === "ready" && this.mode === "link" && !id) admit();
+        if (m.t === "ready" && isRoomMode(this.mode) && !id) admit();
         else if (m.t === "viewer" && this.mode === "screen" && id) {
           this.names.set(id, guestNick);
           this.updateRoster();
@@ -1201,6 +1418,8 @@ const net = {
           remoteMask = m.m | 0;
           applyButtons();
         }
+      } else if (id && this.mode === "sync") {
+        sync.onData(new Uint8Array(msg));
       } else if (id && this.mode === "link") {
         const bytes = new Uint8Array(msg);
         const dest = bytes[0] | (bytes[1] << 8);
@@ -1249,6 +1468,7 @@ const net = {
       const gone = () => {
         if (this.conn !== conn) return;
         if (this.mode === "link" && this.role === "guest") engine.netStop();
+        if (this.mode === "sync") sync.stop();
         lastNetError = "Se perdió la conexión con tu amigo. Podéis volver a invitaros desde la lista de amigos.";
         setNetStatus("Desconectado", "bad");
         if (this.role === "viewer") screenMsg("La partida ha terminado o se perdió la conexión.");
@@ -1289,6 +1509,7 @@ const net = {
   onHostData(msg) {
     if (typeof msg !== "string") {
       if (this.role !== "guest") return;
+      if (this.mode === "sync") return sync.onData(new Uint8Array(msg));
       const bytes = new Uint8Array(msg);
       engine.netReceive(bytes[0] | (bytes[1] << 8), bytes.slice(2));
       return;
@@ -1303,7 +1524,13 @@ const net = {
       else if (engine) this.sendReady();
       else this.waitForRom(m.game);
     } else if (m.t === "welcome") {
-      if (this.mode === "link") {
+      if (this.mode === "sync") {
+        this.role = "guest";
+        sync.begin(this.conn, "guest");
+        friends.broadcastStatus();
+        setNetStatus("🎮 Conectado · mando 2", "ok");
+        toast(`¡Estás en la partida de ${this.hostNick}! Llevas el mando 2.`, 5000);
+      } else if (this.mode === "link") {
         this.role = "guest";
         engine.onNetSend = (data, client) => {
           const framed = new Uint8Array(data.length + 2);
@@ -1370,6 +1597,7 @@ const net = {
 
   stop(silent) {
     if (engine && this.mode === "link") engine.netStop();
+    if (this.mode === "sync") sync.stop();
     if (this.call) this.call.close();
     if (this.conn) this.conn.close();
     for (const conn of this.conns.values()) conn.close();
@@ -1592,7 +1820,7 @@ const friends = {
   },
 
   hello() {
-    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && net.mode === "link" };
+    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && isRoomMode(net.mode) };
   },
 
   broadcastStatus() {
@@ -1651,10 +1879,10 @@ const friends = {
     const conn = this.conns.get(id);
     if (!conn || !conn.open) return toast(`${this.nickOf(id)} no está conectado ahora`);
     if (!engine) return toast("Abre primero tu juego para poder invitar");
-    if (net.role && !(net.role === "host" && net.mode === "link")) {
+    if (net.role && !(net.role === "host" && isRoomMode(net.mode))) {
       return toast("Ya estás en una sala. Termina el multijugador para crear la tuya.", 4000);
     }
-    if (!net.role) net.host("link");
+    if (!net.role) net.host(roomMode());
     toast(`Invitación enviada a ${this.nickOf(id)}…`);
     net.whenHostReady(() => conn.open && conn.send({ t: "invite", code: net.code, game: romName, nick: this.nick }));
   },
@@ -1727,12 +1955,12 @@ function renderFriends() {
 
 function renderLobby() {
   const box = $("#lobby");
-  const show = net.mode === "link" && (net.role === "host" || net.role === "guest");
+  const show = isRoomMode(net.mode) && (net.role === "host" || net.role === "guest");
   box.hidden = !show;
   if (!show) return;
   box.innerHTML = "";
   const players = net.roster.length ? net.roster : [{ id: 0, nick: net.hostNick || "Anfitrión" }];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < (net.mode === "sync" ? 2 : 4); i++) {
     const p = players[i];
     const slot = document.createElement("div");
     slot.className = "slot-card" + (p ? " taken" : "") + (p && p.id === 0 ? " host" : "");

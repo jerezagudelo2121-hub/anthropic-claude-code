@@ -125,6 +125,8 @@ class GbaRenderer {
     this.canvas = canvas;
     this.shader = "pixel";
     this.colorCorrection = false;
+    this.w = GBA_W;
+    this.h = GBA_H;
     const opts = { alpha: false, antialias: false, preserveDrawingBuffer: true, premultipliedAlpha: false };
     const gl = this.gl = force2d ? null : canvas.getContext("webgl", opts) || canvas.getContext("experimental-webgl", opts);
     if (!gl) {
@@ -140,12 +142,35 @@ class GbaRenderer {
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    this.source = this.texture(GBA_W, GBA_H);
-    this.pass1 = this.target(GBA_W * 2, GBA_H * 2);
-    this.pass2 = this.target(GBA_W * 4, GBA_H * 4);
+    this.allocate();
     this.resize();
     if (window.ResizeObserver) new ResizeObserver(() => this.resize()).observe(canvas);
     window.addEventListener("resize", () => this.resize());
+  }
+
+  // Texturas a la medida de la imagen de la consola.
+  allocate() {
+    const gl = this.gl;
+    for (const t of [this.source, this.pass1 && this.pass1.tex, this.pass2 && this.pass2.tex]) if (t) gl.deleteTexture(t);
+    for (const p of [this.pass1, this.pass2]) if (p) gl.deleteFramebuffer(p.fb);
+    this.source = this.texture(this.w, this.h);
+    this.pass1 = this.target(this.w * 2, this.h * 2);
+    this.pass2 = this.target(this.w * 4, this.h * 4);
+  }
+
+  // Cambia el tamaño de la imagen (Super Nintendo: 256×224, a veces 512×448).
+  setSize(w, h) {
+    if (w === this.w && h === this.h) return;
+    this.w = w;
+    this.h = h;
+    this.lastPixels = null;
+    if (!this.gl) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+      this.image = this.ctx2d.createImageData(w, h);
+      return;
+    }
+    this.allocate();
   }
 
   get webgl() {
@@ -195,8 +220,8 @@ class GbaRenderer {
   resize() {
     if (!this.gl) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const w = Math.max(GBA_W, Math.round(this.canvas.clientWidth * dpr));
-    const h = Math.max(GBA_H, Math.round(this.canvas.clientHeight * dpr));
+    const w = Math.max(this.w, Math.round(this.canvas.clientWidth * dpr));
+    const h = Math.max(this.h, Math.round(this.canvas.clientHeight * dpr));
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
@@ -232,7 +257,7 @@ class GbaRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  /* pixels: Uint8ClampedArray RGBA de 240×160 */
+  /* pixels: Uint8ClampedArray RGBA del tamaño actual (this.w × this.h) */
   draw(pixels) {
     this.lastPixels = pixels;
     if (!this.gl) {
@@ -242,15 +267,15 @@ class GbaRenderer {
     }
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.source);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, GBA_W, GBA_H, gl.RGBA, gl.UNSIGNED_BYTE,
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.w, this.h, gl.RGBA, gl.UNSIGNED_BYTE,
       pixels instanceof Uint8Array ? pixels : new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.length));
     const W = this.canvas.width, H = this.canvas.height;
     if (this.shader === "hd") {
-      this.pass(this.programs.epx, this.source, [GBA_W, GBA_H], null, this.pass1.fb, [this.pass1.w, this.pass1.h], false);
+      this.pass(this.programs.epx, this.source, [this.w, this.h], null, this.pass1.fb, [this.pass1.w, this.pass1.h], false);
       this.pass(this.programs.epx, this.pass1.tex, [this.pass1.w, this.pass1.h], null, this.pass2.fb, [this.pass2.w, this.pass2.h], false);
       this.pass(this.programs.smooth, this.pass2.tex, [this.pass2.w, this.pass2.h], [W, H], null, [W, H], true);
     } else {
-      this.pass(this.programs[this.shader], this.source, [GBA_W, GBA_H], [W, H], null, [W, H], true);
+      this.pass(this.programs[this.shader], this.source, [this.w, this.h], [W, H], null, [W, H], true);
     }
   }
 }
