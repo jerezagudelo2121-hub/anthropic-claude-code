@@ -23,6 +23,8 @@ Incluye **multijugador online** para jugar con un amigo.
 - Exportar / importar el archivo `.sav` (por ejemplo, para pasar tu partida del Android).
 - **Biblioteca de juegos**: añade varias ROMs a la vez y quedan guardadas en el móvil, con la
   portada de cada juego (una captura de su pantalla), buscador, renombrar y eliminar.
+- **📂 Varias partidas por juego**: cada partida tiene su propio guardado y sus propias ranuras de
+  guardado rápido. Crea, renombra o borra partidas desde el ⋯ del juego o ☰ → Opciones → 📂 Partidas.
 - BIOS de GBA opcional (`gba_bios.bin`).
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.

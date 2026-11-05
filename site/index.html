@@ -233,6 +233,7 @@
         <h3>⚙️ Opciones</h3>
         <div class="grid">
           <button class="btn" data-action="mute">🔊 Sonido</button>
+          <button class="btn" data-action="saves">📂 Partidas</button>
           <button class="btn" data-action="restart">🔄 Reiniciar</button>
           <button class="btn" data-action="export-save">💾 Exportar .sav</button>
           <button class="btn" data-action="import-save">📂 Importar .sav</button>
@@ -268,12 +269,27 @@
   </div>
 </div>
 
+<!-- Partidas de un juego -->
+<div id="saves-sheet" class="sheet" hidden>
+  <div class="sheet-body">
+    <div class="sheet-handle"></div>
+    <div class="menu-head">
+      <h2 id="ss-title">📂 Partidas</h2>
+      <button class="icon-btn" id="ss-close" aria-label="Cerrar">✕</button>
+    </div>
+    <p class="hint">Cada partida tiene su propio guardado y sus propias ranuras de guardado rápido.</p>
+    <div id="ss-list" class="save-list"></div>
+    <button class="btn primary" id="ss-new">➕ Nueva partida</button>
+  </div>
+</div>
+
 <!-- Opciones de un juego de la biblioteca -->
 <div id="game-sheet" class="sheet" hidden>
   <div class="sheet-body">
     <h2 id="gs-title"></h2>
     <p id="gs-info"></p>
     <button class="btn primary" data-gs="play">▶ Jugar</button>
+    <button class="btn" data-gs="saves">📂 Partidas <small id="gs-saves-count"></small></button>
     <div class="grid">
       <button class="btn" data-gs="rename">✏️ Renombrar</button>
       <button class="btn" data-gs="export">💾 Exportar partida</button>
