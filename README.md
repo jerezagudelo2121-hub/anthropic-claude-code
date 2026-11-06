@@ -43,13 +43,16 @@ coleccionables, con criaturas, nombres y gráficos propios (todo dibujado con c�
 
 - Mundo generado (isla con playa, bosque, hierba alta y montañas con carbón, hierro y gemas).
 - **A**: talar, picar, cortar hierba (bayas), usar el banco o la hoguera. **B**: poner bloques.
+  **X**: correr. **Y**: cambiar el bloque de la mano. **🔍**: zoom. **🏕️**: volver a la última hoguera.
 - **Fabricar**: tablas, palos, banco de trabajo, picos de madera/piedra/hierro, cubos, supercubos,
   hogueras, ladrillos y pociones.
-- **12 criaturas** de 6 tipos, combates por turnos con eficacias, experiencia y niveles, captura
+- **20 criaturas** de 6 tipos, dibujadas a 48×48 con volumen, contorno de color, ojos con brillo,
+  vista de espalda en combate y animación de respirar; combates por turnos con eficacias, experiencia y niveles, captura
   con cubos, equipo de 6 y caja.
 - Día y noche (de noche aparecen criaturas distintas y las hogueras iluminan). Guardado automático.
 - **Misiones** que guían la partida hasta el jefe final, el **Guardián Obsidiano**, en la cumbre.
-- **Evoluciones** (Brasito → Fogaro, Gotín → Marejo, Brotín → Arbolón al nivel 16).
+- **Evoluciones** (Brasito → Fogaro, Gotín → Marejo, Brotín → Arbolón al nivel 16; Chispín → Voltarín al 20).
+- Bloques con textura pixelada y relieve de cubo (cara de arriba y de delante), árboles de bloques.
 - Criaturas que **pasean por el mapa**, **mapa** que se descubre al explorar, chispas al romper
   bloques, espuma en la orilla y hierba que se mece.
 - **Sonido y música** sintetizados con WebAudio (sin archivos), con opción para quitarlos.
