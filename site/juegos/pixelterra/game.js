@@ -10,6 +10,7 @@ const W = 192, H = 192;                  // tamaño del mundo en casillas
 const TS = 16;                           // tamaño de una casilla en píxeles de arte
 const DAY_SECONDS = 240;                 // un día completo dura 4 minutos
 const STEP_MS = 150;                     // tiempo por paso
+const RUN_MS = 85;                       // tiempo por paso corriendo
 
 /* ---------- Utilidades ---------- */
 
@@ -247,46 +248,111 @@ const MOVES = {
   temblor: { name: "Temblor", type: "roca", pow: 90 },
 };
 
-/* Criaturas. art: operaciones de dibujo en una rejilla de 24×24 (se perfilan solas).
- *   ["e", cx, cy, rx, ry, color]  elipse      ["r", x, y, w, h, color]  rectángulo
- *   ["t", x1, y1, x2, y2, x3, y3, color]  triángulo   ["o", x, y, color]  ojo (1 píxel) */
+/* Criaturas (el dibujo de cada una está en ART, más abajo). */
 const SPECIES = {
-  brasito: { name: "Brasito", type: "fuego", base: { hp: 45, atk: 56, def: 42, spd: 55 }, learn: [[1, "placaje"], [1, "ascuas"], [14, "llamarada"]], evo: { lvl: 16, to: "fogaro" },
-    art: [["t", 3, 16, 7, 6, 9, 15, "#ffcc33"], ["e", 4, 8, 2, 3, "#ff5a1f"], ["e", 11, 15, 6, 5, "#ff8a3d"], ["e", 16, 10, 4, 4, "#ff8a3d"], ["e", 11, 17, 3, 2, "#ffd27a"], ["r", 7, 19, 3, 3, "#e0662a"], ["r", 13, 19, 3, 3, "#e0662a"], ["o", 17, 9, "#1b1b1b"], ["r", 18, 11, 2, 1, "#a8361a"]] },
-  gotin: { name: "Gotín", type: "agua", base: { hp: 52, atk: 46, def: 52, spd: 45 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]], evo: { lvl: 16, to: "marejo" },
-    art: [["t", 12, 2, 5, 13, 19, 13, "#5ab8ff"], ["e", 12, 15, 7, 6, "#5ab8ff"], ["e", 9, 12, 1, 2, "#d7f1ff"], ["o", 10, 15, "#123"], ["o", 14, 15, "#123"], ["r", 11, 18, 3, 1, "#2a5f99"]] },
-  brotin: { name: "Brotín", type: "planta", base: { hp: 50, atk: 48, def: 54, spd: 43 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]], evo: { lvl: 16, to: "arbolon" },
-    art: [["r", 11, 8, 2, 4, "#3fae46"], ["t", 12, 9, 4, 4, 9, 11, "#3fae46"], ["t", 12, 9, 20, 4, 15, 11, "#56c45a"], ["e", 12, 16, 6, 5, "#7fd36b"], ["o", 10, 15, "#132"], ["o", 14, 15, "#132"], ["r", 8, 17, 1, 1, "#ff9aa2"], ["r", 16, 17, 1, 1, "#ff9aa2"]] },
-  plumi: { name: "Plumi", type: "normal", base: { hp: 40, atk: 46, def: 36, spd: 70 }, learn: [[1, "picotazo"], [6, "aranazo"]],
-    art: [["t", 11, 7, 13, 3, 14, 8, "#e74c3c"], ["e", 12, 14, 6, 6, "#f2efe6"], ["e", 8, 15, 3, 4, "#d8d2c2"], ["t", 17, 12, 21, 13, 17, 14, "#ffb02e"], ["o", 15, 12, "#1b1b1b"], ["r", 10, 20, 1, 2, "#ffb02e"], ["r", 13, 20, 1, 2, "#ffb02e"]] },
-  musguito: { name: "Musguito", type: "planta", base: { hp: 44, atk: 42, def: 48, spd: 40 }, learn: [[1, "placaje"], [5, "hoja"], [18, "raices"]],
-    art: [["r", 8, 9, 1, 4, "#3b5a24"], ["r", 15, 9, 1, 4, "#3b5a24"], ["e", 12, 16, 8, 5, "#5f8f3a"], ["e", 9, 13, 3, 2, "#8fd16b"], ["e", 15, 13, 3, 2, "#8fd16b"], ["r", 6, 20, 2, 2, "#3b5a24"], ["r", 11, 20, 2, 2, "#3b5a24"], ["r", 16, 20, 2, 2, "#3b5a24"], ["o", 10, 16, "#111"], ["o", 14, 16, "#111"]] },
-  chispin: { name: "Chispín", type: "electrico", base: { hp: 38, atk: 52, def: 36, spd: 76 }, learn: [[1, "aranazo"], [3, "chispa"], [16, "trueno"]],
-    art: [["t", 5, 13, 8, 6, 10, 13, "#e0a800"], ["t", 9, 11, 12, 3, 15, 11, "#e0a800"], ["t", 14, 12, 18, 6, 19, 13, "#e0a800"], ["e", 12, 15, 7, 5, "#ffe14a"], ["o", 10, 15, "#222"], ["o", 14, 15, "#222"], ["r", 7, 17, 2, 1, "#4aa8ff"], ["r", 16, 17, 2, 1, "#4aa8ff"]] },
-  corali: { name: "Corali", type: "agua", base: { hp: 46, atk: 56, def: 62, spd: 32 }, learn: [[1, "aranazo"], [4, "burbuja"], [16, "torrente"]],
-    art: [["e", 4, 12, 3, 3, "#ff7b6b"], ["e", 20, 12, 3, 3, "#ff7b6b"], ["r", 9, 9, 1, 4, "#b3443a"], ["r", 14, 9, 1, 4, "#b3443a"], ["e", 12, 16, 7, 4, "#ff7b6b"], ["r", 6, 20, 1, 2, "#b3443a"], ["r", 9, 20, 1, 2, "#b3443a"], ["r", 14, 20, 1, 2, "#b3443a"], ["r", 17, 20, 1, 2, "#b3443a"], ["o", 9, 8, "#111"], ["o", 14, 8, "#111"]] },
-  pedron: { name: "Pedrón", type: "roca", base: { hp: 56, atk: 56, def: 72, spd: 22 }, learn: [[1, "placaje"], [4, "pedrada"], [18, "avalancha"]],
-    art: [["r", 3, 11, 3, 7, "#8a8a8a"], ["r", 18, 11, 3, 7, "#8a8a8a"], ["r", 6, 8, 12, 13, "#9a9a9a"], ["e", 12, 8, 6, 3, "#a9a9a9"], ["r", 9, 15, 1, 3, "#6e6e6e"], ["r", 14, 17, 2, 1, "#6e6e6e"], ["o", 10, 11, "#5ff2e0"], ["o", 14, 11, "#5ff2e0"]] },
-  topin: { name: "Topín", type: "roca", base: { hp: 46, atk: 52, def: 52, spd: 42 }, learn: [[1, "aranazo"], [6, "pedrada"], [20, "avalancha"]],
-    art: [["e", 12, 15, 7, 6, "#8b5e3c"], ["e", 12, 17, 2, 1, "#ffb3a1"], ["r", 4, 18, 3, 2, "#e8d6b0"], ["r", 17, 18, 3, 2, "#e8d6b0"], ["e", 12, 10, 4, 1, "#c9a76a"], ["o", 10, 14, "#111"], ["o", 14, 14, "#111"]] },
-  cenizo: { name: "Cenizo", type: "fuego", base: { hp: 48, atk: 60, def: 42, spd: 62 }, learn: [[1, "aranazo"], [4, "ascuas"], [16, "llamarada"]],
-    art: [["e", 5, 13, 3, 5, "#ff7a2e"], ["e", 4, 9, 2, 2, "#ffd27a"], ["e", 12, 16, 5, 4, "#7a7f8a"], ["t", 10, 9, 11, 3, 13, 8, "#7a7f8a"], ["t", 14, 8, 16, 3, 18, 9, "#7a7f8a"], ["e", 14, 10, 4, 4, "#7a7f8a"], ["e", 16, 12, 2, 1, "#b9bdc6"], ["o", 13, 10, "#ff7a2e"], ["o", 16, 10, "#ff7a2e"]] },
-  lumi: { name: "Lumi", type: "normal", base: { hp: 42, atk: 52, def: 42, spd: 66 }, learn: [[1, "destello"], [10, "placaje"]], night: true,
-    art: [["e", 12, 12, 8, 8, "#fff3b066"], ["t", 9, 16, 15, 16, 12, 23, "#fff3b0"], ["e", 12, 12, 5, 6, "#fff3b0"], ["o", 10, 11, "#3a2f00"], ["o", 14, 11, "#3a2f00"], ["r", 3, 4, 1, 1, "#ffffff"], ["r", 20, 6, 1, 1, "#ffffff"], ["r", 19, 19, 1, 1, "#ffffff"]] },
-  voltibicho: { name: "Voltibicho", type: "electrico", base: { hp: 46, atk: 54, def: 48, spd: 56 }, learn: [[1, "placaje"], [5, "chispa"], [18, "trueno"]], night: true,
-    art: [["t", 12, 3, 10, 10, 14, 10, "#ffe14a"], ["e", 12, 15, 7, 5, "#3d4bd9"], ["r", 12, 10, 1, 10, "#1f2a8a"], ["e", 9, 14, 1, 1, "#ffe14a"], ["e", 15, 16, 1, 1, "#ffe14a"], ["r", 6, 19, 2, 2, "#1f2a8a"], ["r", 16, 19, 2, 2, "#1f2a8a"], ["o", 8, 17, "#fff"], ["o", 16, 17, "#fff"]] },
+  brasito: { name: "Brasito", type: "fuego", base: { hp: 45, atk: 56, def: 42, spd: 55 }, learn: [[1, "placaje"], [1, "ascuas"], [14, "llamarada"]], evo: { lvl: 16, to: "fogaro" } },
+  gotin: { name: "Gotín", type: "agua", base: { hp: 52, atk: 46, def: 52, spd: 45 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]], evo: { lvl: 16, to: "marejo" } },
+  brotin: { name: "Brotín", type: "planta", base: { hp: 50, atk: 48, def: 54, spd: 43 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]], evo: { lvl: 16, to: "arbolon" } },
+  plumi: { name: "Plumi", type: "normal", base: { hp: 40, atk: 46, def: 36, spd: 70 }, learn: [[1, "picotazo"], [6, "aranazo"]] },
+  musguito: { name: "Musguito", type: "planta", base: { hp: 44, atk: 42, def: 48, spd: 40 }, learn: [[1, "placaje"], [5, "hoja"], [18, "raices"]] },
+  chispin: { name: "Chispín", type: "electrico", base: { hp: 38, atk: 52, def: 36, spd: 76 }, learn: [[1, "aranazo"], [3, "chispa"], [16, "trueno"]] },
+  corali: { name: "Corali", type: "agua", base: { hp: 46, atk: 56, def: 62, spd: 32 }, learn: [[1, "aranazo"], [4, "burbuja"], [16, "torrente"]] },
+  pedron: { name: "Pedrón", type: "roca", base: { hp: 56, atk: 56, def: 72, spd: 22 }, learn: [[1, "placaje"], [4, "pedrada"], [18, "avalancha"]] },
+  topin: { name: "Topín", type: "roca", base: { hp: 46, atk: 52, def: 52, spd: 42 }, learn: [[1, "aranazo"], [6, "pedrada"], [20, "avalancha"]] },
+  cenizo: { name: "Cenizo", type: "fuego", base: { hp: 48, atk: 60, def: 42, spd: 62 }, learn: [[1, "aranazo"], [4, "ascuas"], [16, "llamarada"]] },
+  lumi: { name: "Lumi", type: "normal", base: { hp: 42, atk: 52, def: 42, spd: 66 }, learn: [[1, "destello"], [10, "placaje"]], night: true },
+  voltibicho: { name: "Voltibicho", type: "electrico", base: { hp: 46, atk: 54, def: 48, spd: 56 }, learn: [[1, "placaje"], [5, "chispa"], [18, "trueno"]], night: true },
 };
 // Evoluciones de las tres iniciales (nivel 16) y el jefe final.
 Object.assign(SPECIES, {
-  fogaro: { name: "Fogaro", type: "fuego", base: { hp: 68, atk: 82, def: 62, spd: 78 }, learn: [[1, "aranazo"], [1, "ascuas"], [14, "llamarada"], [24, "magma"]],
-    art: [["t", 1, 19, 5, 10, 7, 18, "#ffcc33"], ["e", 3, 9, 2, 3, "#ff3a1f"], ["e", 12, 15, 7, 7, "#ff6a2a"], ["e", 12, 17, 4, 4, "#ffd27a"], ["t", 10, 5, 11, 0, 13, 5, "#ffcc33"], ["t", 15, 5, 17, 0, 18, 5, "#ffcc33"], ["e", 14, 7, 5, 4, "#ff6a2a"], ["r", 4, 12, 2, 5, "#ff6a2a"], ["r", 19, 12, 2, 5, "#ff6a2a"], ["r", 8, 20, 3, 3, "#c84a1a"], ["r", 14, 20, 3, 3, "#c84a1a"], ["o", 12, 7, "#1b1b1b"], ["o", 16, 7, "#1b1b1b"], ["r", 15, 9, 3, 1, "#a8361a"]] },
-  marejo: { name: "Marejo", type: "agua", base: { hp: 78, atk: 66, def: 76, spd: 62 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]],
-    art: [["t", 1, 17, 6, 11, 7, 19, "#2a6fb5"], ["t", 23, 17, 18, 11, 17, 19, "#2a6fb5"], ["t", 3, 11, 12, 1, 21, 11, "#5ab8ff"], ["e", 12, 14, 9, 7, "#3f9de8"], ["e", 12, 17, 5, 3, "#a8dcff"], ["e", 7, 6, 2, 2, "#e8f7ff"], ["e", 17, 5, 2, 2, "#e8f7ff"], ["o", 9, 12, "#0d2a4a"], ["o", 15, 12, "#0d2a4a"], ["r", 11, 15, 3, 1, "#1d4f80"]] },
-  arbolon: { name: "Arbolón", type: "planta", base: { hp: 76, atk: 72, def: 82, spd: 52 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]],
-    art: [["r", 3, 12, 4, 2, "#7a4f2a"], ["r", 17, 12, 4, 2, "#7a4f2a"], ["e", 3, 11, 1, 1, "#62c56a"], ["e", 21, 11, 1, 1, "#62c56a"], ["r", 7, 9, 10, 13, "#7a4f2a"], ["r", 9, 10, 1, 10, "#8f6136"], ["e", 12, 6, 9, 5, "#3f9e45"], ["e", 9, 4, 3, 2, "#62c56a"], ["e", 16, 7, 2, 1, "#62c56a"], ["r", 7, 21, 3, 2, "#5a3a1e"], ["r", 14, 21, 3, 2, "#5a3a1e"], ["o", 10, 13, "#ffe14a"], ["o", 14, 13, "#ffe14a"]] },
-  obsidion: { name: "Guardián Obsidiano", type: "roca", boss: true, base: { hp: 120, atk: 80, def: 90, spd: 45 }, learn: [[1, "pedrada"], [1, "magma"], [1, "avalancha"], [1, "temblor"]],
-    art: [["r", 1, 9, 3, 9, "#3a2f55"], ["r", 20, 9, 3, 9, "#3a2f55"], ["r", 4, 6, 16, 15, "#2b2240"], ["e", 12, 6, 6, 4, "#3a2f55"], ["t", 5, 5, 7, 0, 9, 5, "#8a7aa8"], ["t", 15, 5, 17, 0, 19, 5, "#8a7aa8"], ["t", 6, 8, 7, 3, 8, 8, "#b48cff"], ["r", 8, 10, 1, 6, "#ff7a2e"], ["r", 15, 12, 1, 5, "#ff7a2e"], ["r", 11, 17, 3, 1, "#ff7a2e"], ["r", 5, 21, 4, 2, "#1d1630"], ["r", 15, 21, 4, 2, "#1d1630"], ["o", 10, 6, "#ff3a3a"], ["o", 14, 6, "#ff3a3a"]] },
+  fogaro: { name: "Fogaro", type: "fuego", base: { hp: 68, atk: 82, def: 62, spd: 78 }, learn: [[1, "aranazo"], [1, "ascuas"], [14, "llamarada"], [24, "magma"]] },
+  marejo: { name: "Marejo", type: "agua", base: { hp: 78, atk: 66, def: 76, spd: 62 }, learn: [[1, "placaje"], [1, "burbuja"], [14, "torrente"]] },
+  arbolon: { name: "Arbolón", type: "planta", base: { hp: 76, atk: 72, def: 82, spd: 52 }, learn: [[1, "placaje"], [1, "hoja"], [14, "raices"]] },
+  obsidion: { name: "Guardián Obsidiano", type: "roca", boss: true, base: { hp: 120, atk: 80, def: 90, spd: 45 }, learn: [[1, "pedrada"], [1, "magma"], [1, "avalancha"], [1, "temblor"]] },
 });
+// Criaturas nuevas.
+Object.assign(SPECIES, {
+  hongui: { name: "Hongui", type: "planta", base: { hp: 55, atk: 50, def: 56, spd: 34 }, learn: [[1, "placaje"], [4, "hoja"], [17, "raices"]] },
+  tortuli: { name: "Tortuli", type: "agua", base: { hp: 58, atk: 46, def: 66, spd: 30 }, learn: [[1, "placaje"], [3, "burbuja"], [18, "torrente"]] },
+  polillux: { name: "Polillux", type: "electrico", base: { hp: 40, atk: 58, def: 38, spd: 74 }, learn: [[1, "aranazo"], [4, "chispa"], [10, "destello"], [17, "trueno"]], night: true },
+  voltarin: { name: "Voltarín", type: "electrico", base: { hp: 62, atk: 80, def: 55, spd: 92 }, learn: [[1, "aranazo"], [1, "chispa"], [16, "trueno"], [22, "destello"]] },
+});
+SPECIES.chispin.evo = { lvl: 20, to: "voltarin" };
+
+/* Dibujo de cada criatura: operaciones en una rejilla de 24×24 (admite medios), que se
+ * pintan a 48×48 con volumen, contorno y brillos (ver rasterizeMon). Se dibujan en orden:
+ * lo primero queda detrás.
+ *   ["e", cx, cy, rx, ry, color]  elipse      ["r", x, y, w, h, color]  rectángulo
+ *   ["t", x1, y1, x2, y2, x3, y3, color]  triángulo   ["o", x, y, color]  ojo */
+const ART = {
+  brasito: [["e", 6, 15, 3, 1.5, "#e0662a"], ["t", 1.5, 15, 3.5, 5, 6.5, 14, "#ffb02e"], ["t", 2.5, 14, 3.8, 7.5, 5.5, 13.5, "#fff1a1"], ["e", 4, 6.5, 1.5, 2, "#ff5a1f"],
+    ["r", 8, 18, 3, 4, "#d4541f"], ["e", 11.5, 15, 5.5, 5, "#ff8a3d"], ["e", 12, 17, 3, 2.5, "#ffd9a0"], ["r", 14, 18.5, 3, 3.5, "#e0662a"], ["r", 14, 21.5, 3.5, 1, "#fff3e0"],
+    ["t", 13, 7, 14, 2.5, 16, 6, "#ff8a3d"], ["e", 16, 9.5, 4.5, 4, "#ff8a3d"], ["e", 19, 11, 2, 1.5, "#ffb27a"], ["r", 18.5, 12.5, 2, 0.5, "#8a2a10"], ["o", 17, 8, "#1b1b1b"]],
+  fogaro: [["e", 5, 17, 3, 1.5, "#c84a1a"], ["t", 0.5, 18, 3, 6, 6, 16, "#ffb02e"], ["t", 1.5, 16.5, 3.2, 9, 5, 15.5, "#fff1a1"], ["r", 7, 19, 4, 4, "#b8401a"],
+    ["r", 4, 11, 3, 6, "#e85a20"], ["e", 12, 15, 7, 7, "#ff6a2a"], ["e", 12, 17, 4, 4.5, "#ffd9a0"], ["e", 8.5, 12.5, 1, 1.5, "#ffcc33"], ["r", 13.5, 19, 4, 4, "#d4541f"], ["r", 13.5, 22.5, 4, 1, "#fff3e0"],
+    ["t", 10, 5, 10.5, 0, 13, 4, "#ffcc33"], ["t", 15, 4, 17.5, -0.5, 18.5, 4.5, "#ffcc33"], ["e", 14, 7, 5.5, 4.5, "#ff6a2a"], ["r", 18, 10, 3, 6, "#ff6a2a"], ["r", 18, 15, 3, 1, "#fff3e0"],
+    ["e", 18, 8.5, 2.5, 1.8, "#ffb27a"], ["r", 17, 10, 3, 0.5, "#8a2a10"], ["o", 12, 6, "#1b1b1b"], ["o", 16, 6, "#1b1b1b"]],
+  gotin: [["e", 5, 17, 2, 1.2, "#3f9de8"], ["e", 19, 17, 2, 1.2, "#3f9de8"], ["t", 12, 1.5, 5, 13, 19, 13, "#5ab8ff"], ["e", 12, 15, 7, 6, "#5ab8ff"], ["e", 12, 17.5, 4, 2.5, "#bfe6ff"],
+    ["e", 9, 10, 1.2, 2.2, "#e8f7ff"], ["o", 9, 14, "#123"], ["o", 14, 14, "#123"], ["r", 11, 16.5, 2.5, 0.5, "#2a5f99"], ["e", 7.5, 16, 1, 0.6, "#ff9aa2"], ["e", 16, 16, 1, 0.6, "#ff9aa2"]],
+  marejo: [["t", 1, 17, 6, 11, 7, 19, "#2a6fb5"], ["t", 23, 17, 18, 11, 17, 19, "#2a6fb5"], ["t", 8, 9, 12, 1, 16, 9, "#5ab8ff"], ["e", 12, 15, 9, 7, "#3f9de8"], ["e", 12, 18, 6, 3.5, "#c4e8ff"],
+    ["e", 7, 7.5, 2, 2, "#e8f7ff"], ["e", 17, 6, 2, 2, "#e8f7ff"], ["e", 5, 20, 2.5, 1.2, "#2a6fb5"], ["e", 19, 20, 2.5, 1.2, "#2a6fb5"], ["e", 12, 14, 3, 1.8, "#a8dcff"],
+    ["o", 8, 11, "#0d2a4a"], ["o", 15, 11, "#0d2a4a"], ["r", 11, 15, 2.5, 0.5, "#1d4f80"]],
+  brotin: [["r", 11.5, 6, 1, 5, "#3f8a3a"], ["t", 12, 8, 3.5, 3, 9, 10.5, "#3fae46"], ["t", 12, 8, 20.5, 3, 15, 10.5, "#56c45a"], ["r", 6.5, 19, 3, 3, "#4f9a42"], ["r", 14.5, 19, 3, 3, "#4f9a42"],
+    ["e", 12, 15.5, 6.5, 5.5, "#7fd36b"], ["e", 12, 17.5, 3.5, 2.2, "#c8f0a8"], ["e", 9, 12, 1.3, 0.8, "#b8f09a"], ["o", 9, 14, "#132"], ["o", 14, 14, "#132"],
+    ["e", 7.5, 16.5, 1, 0.6, "#ff9aa2"], ["e", 16.5, 16.5, 1, 0.6, "#ff9aa2"], ["r", 11, 17, 2, 0.5, "#2f6a2a"]],
+  arbolon: [["r", 2, 12, 5, 2, "#7a4f2a"], ["r", 17, 12, 5, 2, "#7a4f2a"], ["e", 2, 11, 1.5, 1.5, "#62c56a"], ["e", 22, 11, 1.5, 1.5, "#62c56a"], ["r", 7, 9, 10, 13, "#7a4f2a"],
+    ["r", 8.5, 10, 1, 11, "#8f6136"], ["r", 14, 14, 1, 7, "#5f3c1e"], ["e", 12, 6, 10, 5.5, "#3f9e45"], ["e", 7, 4, 3.5, 2.5, "#56b85a"], ["e", 16.5, 3.5, 3.5, 2.5, "#56b85a"],
+    ["e", 12, 2.5, 3, 1.5, "#72d26e"], ["e", 9, 8, 1, 0.8, "#ff7a8a"], ["e", 17, 8, 1, 0.8, "#ffd23f"], ["r", 7, 21, 4, 2, "#5a3a1e"], ["r", 13, 21, 4, 2, "#5a3a1e"],
+    ["e", 9.5, 13, 1.2, 1.2, "#3a2510"], ["e", 14.5, 13, 1.2, 1.2, "#3a2510"], ["o", 9, 12.5, "#ffe14a"], ["o", 14, 12.5, "#ffe14a"], ["r", 10, 17, 4, 1, "#3a2510"]],
+  plumi: [["t", 2, 13, 8, 14, 6, 17, "#c9c2b0"], ["r", 10, 19.5, 1, 3, "#ffb02e"], ["r", 13, 19.5, 1, 3, "#ffb02e"], ["e", 12, 14.5, 6, 5.5, "#f2efe6"], ["e", 9, 15.5, 3.5, 3, "#d8d2c2"],
+    ["e", 9, 16.5, 2.5, 1.5, "#c2baa6"], ["t", 13, 7, 14, 2.5, 16, 6.5, "#e74c3c"], ["t", 15, 6.5, 17.5, 3, 17, 7, "#ff6a5a"], ["e", 15, 9.5, 4, 3.5, "#f2efe6"],
+    ["t", 18.5, 9, 22, 10.3, 18.5, 11.5, "#ffb02e"], ["e", 17, 12, 1, 1.2, "#e74c3c"], ["o", 16, 8, "#1b1b1b"], ["e", 14, 11, 1, 0.6, "#ffc2c2"]],
+  musguito: [["r", 6, 19, 2, 2.5, "#3b5a24"], ["r", 11, 19.5, 2, 2.5, "#3b5a24"], ["r", 16, 19, 2, 2.5, "#3b5a24"], ["e", 12, 15.5, 8.5, 5, "#5f8f3a"], ["e", 12, 13, 6, 2.5, "#77a84a"],
+    ["e", 8, 12.5, 2.5, 1.5, "#8fd16b"], ["e", 15, 12, 2.5, 1.5, "#8fd16b"], ["e", 12, 11, 1.5, 1, "#a8e07a"], ["e", 5, 15, 1, 0.8, "#ff9ad5"],
+    ["e", 19.5, 16, 3, 2.5, "#6b8f3a"], ["r", 19, 9.5, 0.5, 4, "#3b5a24"], ["e", 19, 9, 1, 1, "#ffd23f"], ["o", 20, 15, "#111"], ["r", 21, 17, 1.5, 0.5, "#2b4018"]],
+  chispin: [["t", 2, 17, 5, 12, 8, 17, "#c99500"], ["t", 3, 14, 8, 6, 10, 14, "#e0a800"], ["t", 7, 10, 11, 2, 14, 10, "#e0a800"], ["t", 12, 9, 17, 3, 18, 11, "#e0a800"],
+    ["r", 8, 18.5, 2, 3, "#b88a00"], ["e", 12, 15, 7, 5, "#ffe14a"], ["e", 13, 17, 3.5, 2, "#fff6b8"], ["r", 14, 18.5, 2, 3, "#c99500"], ["e", 18, 12.5, 3.5, 3, "#ffe14a"],
+    ["o", 18, 11, "#222"], ["e", 19.5, 14, 1.2, 0.8, "#4aa8ff"], ["r", 20.5, 13, 1, 0.5, "#222"]],
+  voltarin: [["t", 1, 12, 6, 8, 5, 14, "#ffe14a"], ["t", 3, 13, 7, 13, 2, 18, "#ffe14a"], ["t", 6, 11, 9, 4, 12, 11, "#e0a800"], ["t", 10, 10, 13, 2, 16, 10, "#e0a800"],
+    ["r", 7, 18, 2.5, 4, "#b88a00"], ["e", 11.5, 14.5, 6.5, 4.5, "#ffe14a"], ["e", 12, 16.5, 4, 2, "#fff6b8"], ["r", 9, 11, 1, 3, "#3d4bd9"], ["r", 12, 10.5, 1, 3, "#3d4bd9"],
+    ["r", 15, 18, 2.5, 4, "#c99500"], ["t", 15, 8, 15.5, 3, 18, 7, "#ffe14a"], ["t", 19, 7, 21.5, 3, 21.5, 8.5, "#ffe14a"], ["e", 18, 10, 4, 3.5, "#ffe14a"],
+    ["e", 21, 11.5, 2, 1.3, "#fff6b8"], ["o", 18, 9, "#222"], ["e", 19, 12.5, 1, 0.8, "#4aa8ff"]],
+  corali: [["r", 5, 19, 1, 3, "#b3443a"], ["r", 8, 19.5, 1, 3, "#b3443a"], ["r", 15, 19.5, 1, 3, "#b3443a"], ["r", 18, 19, 1, 3, "#b3443a"], ["r", 6, 13, 2, 1.5, "#e05a4a"], ["r", 16, 13, 2, 1.5, "#e05a4a"],
+    ["e", 3.5, 12, 3, 2.5, "#ff7b6b"], ["r", 1, 11.5, 3, 0.5, "#b3443a"], ["e", 20.5, 12, 3, 2.5, "#ff7b6b"], ["r", 20, 11.5, 3, 0.5, "#b3443a"],
+    ["r", 9, 8.5, 1, 4, "#b3443a"], ["r", 14, 8.5, 1, 4, "#b3443a"], ["e", 12, 16, 7, 4.5, "#ff7b6b"], ["e", 12, 14.5, 5, 2, "#ffa395"], ["e", 9, 16, 0.8, 0.8, "#ffd0c8"], ["e", 15, 17, 0.8, 0.8, "#ffd0c8"],
+    ["e", 9, 8, 1, 1, "#f2f2f2"], ["e", 14, 8, 1, 1, "#f2f2f2"], ["o", 9, 8, "#111"], ["o", 14, 8, "#111"], ["r", 11, 18, 2.5, 0.5, "#8a2a22"]],
+  pedron: [["r", 2.5, 11, 3.5, 7, "#8a8a8a"], ["r", 18, 11, 3.5, 7, "#8a8a8a"], ["e", 4, 18.5, 2, 1.5, "#7a7a7a"], ["e", 20, 18.5, 2, 1.5, "#7a7a7a"], ["r", 7, 20, 3.5, 2.5, "#6e6e6e"], ["r", 13.5, 20, 3.5, 2.5, "#6e6e6e"],
+    ["r", 6, 8, 12, 13, "#9a9a9a"], ["e", 12, 8, 6.5, 3.5, "#a9a9a9"], ["e", 9, 15, 1.5, 1.2, "#8a8a8a"], ["e", 15, 17, 1.8, 1.2, "#8a8a8a"], ["e", 15, 5.5, 1.5, 0.8, "#6fa858"],
+    ["r", 8.5, 9.5, 7, 2, "#3a3a40"], ["o", 10, 10, "#5ff2e0"], ["o", 13, 10, "#5ff2e0"]],
+  topin: [["e", 4.5, 18, 2.5, 1.5, "#e8d6b0"], ["e", 19.5, 18, 2.5, 1.5, "#e8d6b0"], ["e", 12, 15.5, 7, 6, "#8b5e3c"], ["e", 12, 18, 4.5, 3, "#c9a67a"],
+    ["e", 12, 9, 4, 2, "#ffd23f"], ["r", 8, 10, 8, 1, "#e0a800"], ["e", 12, 8, 1, 1, "#fff6b8"], ["e", 12, 15, 1.6, 1.2, "#ff9a8a"],
+    ["o", 9, 12, "#111"], ["o", 14, 12, "#111"], ["r", 6.5, 15, 2.5, 0.5, "#4a3020"], ["r", 15, 15, 2.5, 0.5, "#4a3020"]],
+  cenizo: [["e", 5, 13, 3.5, 5, "#ff7a2e"], ["e", 4, 8.5, 2.5, 2.5, "#ffd27a"], ["r", 8, 18.5, 2, 3.5, "#5f646e"], ["e", 12, 16, 5.5, 4, "#7a7f8a"], ["e", 10, 14.5, 0.8, 0.8, "#ff7a2e"],
+    ["r", 14, 18.5, 2, 3.5, "#6a6f7a"], ["e", 15, 15, 2.5, 2.5, "#c9ccd4"], ["t", 12, 8, 12.5, 2.5, 15, 7, "#7a7f8a"], ["t", 16, 7, 18.5, 2.5, 19, 8.5, "#7a7f8a"],
+    ["e", 15.5, 10, 4, 3.5, "#7a7f8a"], ["t", 13, 7, 13.2, 4, 14.5, 6.8, "#ff7a2e"], ["e", 19, 11.5, 2.2, 1.4, "#c9ccd4"], ["e", 21, 11, 0.6, 0.6, "#222"],
+    ["o", 14, 9, "#ff7a2e"], ["o", 17, 9, "#ff7a2e"]],
+  lumi: [["e", 12, 12, 8.5, 8.5, "#fff3b055"], ["r", 11.5, 3.5, 0.5, 3, "#fff3b0"], ["e", 11.5, 3, 1, 1, "#ffffff"], ["t", 9, 16, 15, 16, 12, 23, "#fff3b0"],
+    ["e", 12, 12, 5, 6, "#fff3b0"], ["e", 12, 13.5, 3, 3, "#fffbe0"], ["o", 10, 11, "#3a2f00"], ["o", 13, 11, "#3a2f00"],
+    ["r", 3, 4, 1, 1, "#ffffff"], ["r", 20, 6, 1, 1, "#ffffff"], ["r", 19, 19, 1, 1, "#ffffff"], ["r", 5, 18, 1, 1, "#ffe9a0"]],
+  voltibicho: [["t", 12, 2, 10, 10, 14, 10, "#ffe14a"], ["r", 6, 19, 1.5, 3, "#1f2a8a"], ["r", 11, 20, 1.5, 2.5, "#1f2a8a"], ["r", 16, 19, 1.5, 3, "#1f2a8a"], ["e", 12, 15, 7.5, 5.5, "#3d4bd9"],
+    ["r", 11.5, 10, 1, 10, "#1f2a8a"], ["e", 8.5, 12.5, 2, 1, "#7a86ff"], ["e", 15.5, 12.5, 2, 1, "#7a86ff"], ["e", 9, 15, 1, 1, "#ffe14a"], ["e", 15, 16, 1, 1, "#ffe14a"], ["e", 10, 18, 0.7, 0.7, "#ffe14a"],
+    ["o", 8, 17, "#fff"], ["o", 15, 17, "#fff"]],
+  hongui: [["r", 7.5, 20, 3, 2, "#c9b89a"], ["r", 13.5, 20, 3, 2, "#c9b89a"], ["e", 12, 15.5, 5, 5, "#f2e6cf"], ["e", 12, 13, 7, 1.5, "#e3cfa8"], ["e", 12, 9, 9, 5, "#d9433a"],
+    ["e", 8, 7, 1.5, 1.2, "#fff4e8"], ["e", 14, 5.5, 1.8, 1.2, "#fff4e8"], ["e", 17, 9, 1.2, 1, "#fff4e8"], ["e", 10, 10, 1, 0.8, "#fff4e8"],
+    ["o", 10, 15, "#2a1a10"], ["o", 13, 15, "#2a1a10"], ["e", 8.5, 17, 0.9, 0.6, "#ff9aa2"], ["e", 15.5, 17, 0.9, 0.6, "#ff9aa2"], ["r", 11, 17.5, 2, 0.5, "#5a3020"]],
+  tortuli: [["t", 2, 16, 5, 15, 5, 17, "#3fa08a"], ["e", 6, 19, 2, 1.5, "#3fa08a"], ["e", 17, 19.5, 2, 1.5, "#3fa08a"], ["e", 11, 18, 7.5, 1.5, "#e0c88a"], ["t", 9, 9, 11, 6, 13, 9.5, "#9fd6ff"],
+    ["e", 11, 14, 7.5, 5.5, "#2a6fb5"], ["e", 8, 13, 2, 1.5, "#4a8fd6"], ["e", 13, 12, 2, 1.5, "#4a8fd6"], ["e", 11, 16, 2.5, 1.2, "#4a8fd6"],
+    ["e", 19, 12, 3, 2.7, "#5cc4a8"], ["o", 20, 11, "#102"], ["r", 20.5, 13.5, 1.5, 0.5, "#2a6050"]],
+  polillux: [["t", 12, 14, 4, 20, 9, 21, "#e0a800"], ["t", 12, 14, 20, 20, 15, 21, "#e0a800"], ["t", 12, 12, 1, 3, 3, 16, "#ffe14a"], ["t", 12, 12, 23, 3, 21, 16, "#ffe14a"],
+    ["e", 6, 8, 1.5, 1.5, "#4aa8ff"], ["e", 18, 8, 1.5, 1.5, "#4aa8ff"], ["t", 10.5, 8.5, 8, 3, 10, 8, "#5a4a8a"], ["t", 13.5, 8.5, 16, 3, 14, 8, "#5a4a8a"],
+    ["e", 12, 14, 2.5, 6, "#5a4a8a"], ["e", 12, 10, 3, 2, "#e8e0ff"], ["o", 10, 10, "#111"], ["o", 13, 10, "#111"]],
+  obsidion: [["r", 1, 9, 3.5, 9, "#3a2f55"], ["r", 19.5, 9, 3.5, 9, "#3a2f55"], ["e", 2.5, 18.5, 2.5, 2, "#2b2240"], ["e", 21.5, 18.5, 2.5, 2, "#2b2240"], ["r", 5, 21, 4, 2, "#1d1630"], ["r", 15, 21, 4, 2, "#1d1630"],
+    ["r", 4, 6, 16, 15, "#2b2240"], ["t", 5, 5, 7, -0.5, 9, 5, "#8a7aa8"], ["t", 15, 5, 17, -0.5, 19, 5, "#8a7aa8"], ["e", 12, 6, 6.5, 4, "#3a2f55"],
+    ["t", 6, 8, 7, 3, 8.5, 8, "#b48cff"], ["t", 17, 9, 18, 4, 19.5, 9, "#b48cff"], ["r", 8, 10, 1, 6, "#ff7a2e"], ["r", 15, 12, 1, 5, "#ff7a2e"], ["r", 11, 17, 3, 1, "#ff7a2e"], ["r", 9, 15, 3, 1, "#ffb02e"],
+    ["e", 12, 12, 1.5, 1.5, "#ff3a3a"], ["o", 10, 6, "#ff3a3a"], ["o", 13, 6, "#ff3a3a"]],
+};
+for (const sp in ART) SPECIES[sp].art = ART[sp];
+
 const BESTIARY = Object.keys(SPECIES).filter((sp) => !SPECIES[sp].boss);
 const STARTERS = ["brasito", "gotin", "brotin"];
 
@@ -335,17 +401,115 @@ function gridToCanvas(g, size, scale, outline) {
   return c;
 }
 
-const monArt = {};
-function monCanvas(sp) {
-  if (!monArt[sp]) monArt[sp] = gridToCanvas(rasterize(SPECIES[sp].art, 24), 24, 2, "#1a1a1a");
-  return monArt[sp];
+/* Criaturas a 48×48 con volumen: cada forma se sombrea según su relieve (luz arriba a la
+ * izquierda) en 4 tonos, con brillo en los ojos, líneas interiores y contorno del color de
+ * cada parte (más oscuro), en lugar de un contorno negro plano. */
+function parseColor(c) {
+  let h = c.slice(1);
+  if (h.length <= 4) h = [...h].map((d) => d + d).join("");
+  const n = parseInt(h.slice(0, 6), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255, h.length >= 8 ? parseInt(h.slice(6, 8), 16) : 255];
+}
+const shadeCol = ([r, g, b, a], k) => k >= 0
+  ? [r + (255 - r) * k, g + (255 - g) * k, b + (255 - b) * k * 0.85, a]
+  // Las sombras tiran un poco hacia el violeta, como en el pixel art clásico.
+  : [r * (1 + k), g * (1 + k * 1.08), b * (1 + k * 0.82), a];
+
+function rasterizeMon(ops, back) {
+  const N = 48, col = new Array(N * N).fill(null), lit = new Float32Array(N * N), id = new Int16Array(N * N).fill(-1);
+  const put = (x, y, c, l, i) => { if (x >= 0 && y >= 0 && x < N && y < N) { const k = y * N + x; col[k] = c; lit[k] = l; id[k] = i; } };
+  const sign = (px, py, ax, ay, bx, by) => (px - bx) * (ay - by) - (ax - bx) * (py - by);
+  // Vista de espalda: sin ojos ni detalles pequeños de la cara.
+  if (back) ops = ops.filter((op) => op[0] !== "o" && !(op[0] === "r" && op[3] * op[4] <= 3) && !(op[0] === "e" && op[3] * op[4] <= 1.2));
+  ops.forEach((op, i) => {
+    const c = parseColor(op[op.length - 1]);
+    if (op[0] === "e") {
+      const cx = (op[1] + 0.5) * 2, cy = (op[2] + 0.5) * 2, rx = (op[3] + 0.5) * 2, ry = (op[4] + 0.5) * 2;
+      for (let y = Math.floor(cy - ry); y <= cy + ry; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry, d2 = dx * dx + dy * dy;
+        if (d2 > 1) continue;
+        const nz = Math.sqrt(1 - d2);
+        put(x, y, c, -0.5 * dx - 0.62 * dy + 0.6 * nz, i);
+      }
+    } else if (op[0] === "r") {
+      const X = op[1] * 2, Y = op[2] * 2, w = op[3] * 2, h = op[4] * 2;
+      for (let y = Y; y < Y + h; y++) for (let x = X; x < X + w; x++) {
+        const u = (x - X + 0.5) / w, v = (y - Y + 0.5) / h;
+        let l = 0.5 + (0.5 - v) * 0.35;
+        if (y - Y < 2 && h > 3) l += 0.3;
+        if (x - X < 1 && w > 3) l += 0.12;
+        if (Y + h - y <= 2 && h > 3) l -= 0.35;
+        if (X + w - x <= 1 && w > 3) l -= 0.2;
+        put(x, y, c, l, i);
+      }
+    } else if (op[0] === "t") {
+      const P = [op[1], op[2], op[3], op[4], op[5], op[6]].map((v) => v * 2 + 1);
+      const ys = [P[1], P[3], P[5]], top = Math.min(...ys), bot = Math.max(...ys);
+      for (let y = Math.floor(top); y <= bot; y++) for (let x = Math.floor(Math.min(P[0], P[2], P[4])); x <= Math.max(P[0], P[2], P[4]); x++) {
+        const px = x + 0.5, py = y + 0.5;
+        const d1 = sign(px, py, P[0], P[1], P[2], P[3]), d2 = sign(px, py, P[2], P[3], P[4], P[5]), d3 = sign(px, py, P[4], P[5], P[0], P[1]);
+        if (((d1 < 0) || (d2 < 0) || (d3 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0))) continue;
+        put(x, y, c, 0.72 - ((py - top) / Math.max(1, bot - top)) * 0.5, i);
+      }
+    } else if (op[0] === "o") {
+      // Ojo grande (3×4): pupila, brillo blanco arriba y reflejo abajo; si brilla, centro blanco.
+      const x = Math.round(op[1] * 2), y = Math.round(op[2] * 2) - 1, dark = c[0] + c[1] + c[2] < 330;
+      for (let yy = 0; yy < 4; yy++) for (let xx = 0; xx < 3; xx++) put(x + xx, y + yy, c, 0.5, 1000 + i);
+      if (dark) {
+        put(x, y, [255, 255, 255, 255], 0.5, 1000 + i);
+        put(x, y + 1, [255, 255, 255, 255], 0.5, 1000 + i);
+        put(x + 1, y + 3, shadeCol(c, 0.45), 0.5, 1000 + i);
+      } else {
+        put(x + 1, y + 1, [255, 255, 255, 255], 0.5, 1000 + i);
+        put(x + 1, y + 2, shadeCol(c, 0.5), 0.5, 1000 + i);
+      }
+    }
+  });
+  const out = new Uint8ClampedArray(N * N * 4);
+  const at = (x, y) => (x >= 0 && y >= 0 && x < N && y < N ? y * N + x : -1);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const k = y * N + x;
+    let c = col[k];
+    if (c) {
+      if (id[k] < 1000) {
+        const l = lit[k];
+        c = l > 0.66 ? shadeCol(c, 0.3) : l > 0.3 ? c : l > 0.06 ? shadeCol(c, -0.22) : shadeCol(c, -0.4);
+        // Línea interior: donde una parte queda por delante de otra.
+        for (const n of [at(x, y - 1), at(x - 1, y), at(x + 1, y), at(x, y + 1)]) {
+          if (n >= 0 && col[n] && id[n] > id[k] && id[n] < 1000 && (Math.abs(col[n][0] - col[k][0]) + Math.abs(col[n][1] - col[k][1]) + Math.abs(col[n][2] - col[k][2])) > 60) {
+            c = shadeCol(col[k], -0.5);
+            break;
+          }
+        }
+      }
+    } else {
+      // Contorno: el color de la parte vecina, muy oscurecido.
+      let nb = null;
+      for (const n of [at(x, y + 1), at(x + 1, y), at(x - 1, y), at(x, y - 1)]) if (n >= 0 && col[n] && col[n][3] > 200) { nb = col[n]; break; }
+      if (!nb) continue;
+      c = shadeCol(nb, -0.72);
+      c = [c[0] * 0.8 + 6, c[1] * 0.8 + 4, c[2] * 0.8 + 14, 255];
+    }
+    out.set([c[0], c[1], c[2], c[3]], k * 4);
+  }
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = N;
+  cv.getContext("2d").putImageData(new ImageData(out, N, N), 0, 0);
+  return cv;
 }
 
-function drawMonInto(canvas, sp) {
+const monArt = {};
+function monCanvas(sp, back) {
+  const key = sp + (back ? "-b" : "");
+  if (!monArt[key]) monArt[key] = rasterizeMon(SPECIES[sp].art, back);
+  return monArt[key];
+}
+
+function drawMonInto(canvas, sp, back) {
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(monCanvas(sp), 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(monCanvas(sp, back), 0, 0, canvas.width, canvas.height);
 }
 
 /* ---------- Arte: casillas del mundo (16×16) ---------- */
@@ -365,77 +529,139 @@ function speckle(px, r, base, cols, n) {
   for (let i = 0; i < n; i++) px(Math.floor(r() * TS), Math.floor(r() * TS), cols[Math.floor(r() * cols.length)]);
 }
 
-function stoneBase(px, r) {
-  speckle(px, r, "#8c8c8c", ["#7d7d7d", "#9b9b9b", "#848484"], 40);
-  px(0, 0, "#a8a8a8", TS, 1); px(0, 0, "#a0a0a0", 1, TS);
-  px(0, TS - 1, "#5e5e5e", TS, 1); px(TS - 1, 0, "#666", 1, TS);
-  px(0, 7, "#777", TS, 1); px(7, 0, "#777", 1, 7); px(11, 8, "#777", 1, 8);
-}
-
-function ore(px, r, col, hi) {
-  stoneBase(px, r);
-  for (let i = 0; i < 5; i++) {
-    const x = 2 + Math.floor(r() * 11), y = 2 + Math.floor(r() * 11);
-    px(x, y, col, 2, 2); px(x, y, hi);
+/* Texturas de bloque al estilo "cubos": cada píxel de la casilla tiene su tono (ruido),
+ * con pequeños grupos del mismo color, y los bloques sólidos llevan bisel (luz arriba e
+ * izquierda, sombra abajo y derecha) para que se lean como cubos. */
+function noiseFill(px, r, pal, x0 = 0, y0 = 0, w = TS, h = TS, clump = 0.35) {
+  const row = [];
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+    const above = row[(y - 1) * TS + x], left = row[y * TS + x - 1];
+    let c;
+    if (left && x > x0 && r() < clump) c = left;
+    else if (above && y > y0 && r() < clump * 0.6) c = above;
+    else c = pal[Math.floor(Math.pow(r(), 1.3) * pal.length)];
+    row[y * TS + x] = c;
+    px(x, y, c);
   }
 }
+function bevel(px, hi, lo) {
+  px(0, 0, hi, TS, 1); px(0, 0, hi, 1, TS);
+  px(0, TS - 1, lo, TS, 1); px(TS - 1, 0, lo, 1, TS);
+}
+const STONE_PAL = ["#8a8a8a", "#7e7e7e", "#959595", "#747474", "#9e9e9e", "#6a6a6a"];
+function stoneBase(px, r) {
+  noiseFill(px, r, STONE_PAL);
+  // Manchas más oscuras, como en la piedra de verdad.
+  for (let i = 0; i < 4; i++) {
+    const x = 1 + Math.floor(r() * 12), y = 1 + Math.floor(r() * 12);
+    px(x, y, "#666", 2 + Math.floor(r() * 2), 1); px(x + 1, y + 1, "#5e5e5e", 1 + Math.floor(r() * 2), 1);
+  }
+  bevel(px, "#b4b4b4", "#4e4e4e");
+}
+function ore(px, r, cols) {
+  stoneBase(px, r);
+  // Vetas: grupos de 3–5 píxeles con brillo y sombra.
+  const spots = [[3, 3], [9, 2], [5, 8], [11, 9], [2, 12], [8, 12]].sort(() => r() - 0.5).slice(0, 4);
+  for (const [sx, sy] of spots) {
+    const x = sx + Math.floor(r() * 2), y = sy + Math.floor(r() * 2);
+    px(x, y, cols[0], 2, 2); px(x + 2, y + 1, cols[0]); px(x - 1, y + 1, cols[2]);
+    px(x, y, cols[1]); px(x + 1, y + 2, cols[2], 2, 1);
+  }
+}
+const GRASS_PAL = ["#5ba33d", "#64ad44", "#6fba4c", "#54983a", "#4b8d34", "#78c255"];
+const grassTile = (seed, extra) => makeTile((px, r) => { noiseFill(px, r, GRASS_PAL, 0, 0, TS, TS, 0.3); if (extra) extra(px, r); }, seed);
 
 const TILE_ART = {
   [T.WATER]: [0, 1].map((f) => makeTile((px, r) => {
-    speckle(px, r, "#3a8fd6", ["#3585cc", "#4199df"], 20);
-    for (let i = 0; i < 3; i++) { const y = 3 + i * 5, x = (f * 4 + i * 5) % 12; px(x, y, "#9fd6ff", 4, 1); }
+    noiseFill(px, r, ["#2f63d4", "#3369da", "#2c5ccb", "#3a72e2", "#295ac4"], 0, 0, TS, TS, 0.5);
+    for (let i = 0; i < 4; i++) { const y = 1 + i * 4, x = (f * 3 + i * 6) % 13; px(x, y, "#6f9cf0", 3, 1); px(x + 1, y, "#a6c6ff", 1, 1); }
   }, 11 + f)),
   [T.DEEP]: [0, 1].map((f) => makeTile((px, r) => {
-    speckle(px, r, "#2a6fb5", ["#2766ab", "#3078bd"], 20);
-    for (let i = 0; i < 2; i++) { const y = 5 + i * 6, x = (f * 5 + i * 7) % 12; px(x, y, "#5aa8e8", 3, 1); }
+    noiseFill(px, r, ["#24489e", "#284fa8", "#213f8f", "#2c56b2"], 0, 0, TS, TS, 0.5);
+    for (let i = 0; i < 2; i++) { const y = 4 + i * 7, x = (f * 5 + i * 7) % 12; px(x, y, "#4a76d0", 3, 1); }
   }, 21 + f)),
-  [T.SAND]: [makeTile((px, r) => speckle(px, r, "#e8d48f", ["#dcc67f", "#f3e2a6", "#d6bf74"], 30), 3)],
-  [T.GRASS]: [makeTile((px, r) => speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a", "#4f9a42"], 34), 4)],
+  [T.SAND]: [makeTile((px, r) => noiseFill(px, r, ["#dccf8f", "#e3d79c", "#d3c482", "#e9dea8", "#cbbb76"]), 3)],
+  [T.GRASS]: [grassTile(4)],
   [T.TALL]: [makeTile((px, r) => {
-    speckle(px, r, "#4f9a42", ["#4a9140", "#57a248"], 20);
-    for (let i = 0; i < 9; i++) { const x = 1 + ((i * 5) % 14), y = 4 + ((i * 7) % 9); px(x, y, "#2f7a2f", 1, 4); px(x + 1, y + 1, "#7fd06a", 1, 3); }
+    // Matas de hierba alta (fondo transparente: se pinta sobre el césped).
+    for (let i = 0; i < 7; i++) {
+      const x = 1 + ((i * 5 + 2) % 14), h = 6 + Math.floor(r() * 5), y = 15 - h;
+      px(x, y + 1, "#3f8a2a", 1, h); px(x + 1, y + 3, "#2f6e20", 1, h - 3); px(x, y, "#8fdc6a"); px(x - 1, y + 2, "#5aad3a", 1, 2);
+    }
   }, 5)],
-  [T.TREE]: [makeTile((px, r, ctx) => {
-    speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a"], 20);
-    px(6, 10, "#6b4426", 4, 6); px(7, 10, "#8a5a32", 1, 6);
-    ctx.fillStyle = "#1f5e25"; ctx.beginPath(); ctx.arc(8, 7, 7, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#2f7d32"; ctx.beginPath(); ctx.arc(7, 6, 5.5, 0, Math.PI * 2); ctx.fill();
-    px(4, 3, "#4fa34f", 2, 2); px(9, 5, "#4fa34f", 2, 1); px(6, 8, "#4fa34f", 1, 1);
+  [T.TREE]: [makeTile((px, r) => {
+    // Icono: tronco visto de cerca.
+    noiseFill(px, r, ["#6b4a2b", "#5c3f24", "#7a5532", "#4f361f"]);
+    for (let x = 2; x < TS; x += 4) px(x, 0, "#3e2a17", 1, TS);
+    px(0, 0, "#a07a46", TS, 3); noiseFill(px, r, ["#b8915a", "#a8814c", "#c49d64"], 1, 0, 14, 2);
   }, 6)],
   [T.STONE]: [makeTile((px, r) => stoneBase(px, r), 7)],
-  [T.COAL]: [makeTile((px, r) => ore(px, r, "#1e1e1e", "#3a3a3a"), 8)],
-  [T.IRON]: [makeTile((px, r) => ore(px, r, "#d9a066", "#f0c493"), 9)],
-  [T.GEM]: [makeTile((px, r) => ore(px, r, "#2fd8c8", "#c8fff8"), 10)],
-  [T.FLOWER]: [makeTile((px, r) => {
-    speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a"], 24);
-    for (const [x, y, c] of [[3, 4, "#ff5a6e"], [10, 3, "#ffd23f"], [6, 10, "#ffffff"], [12, 11, "#ff5a6e"]]) { px(x, y + 1, "#2f7a2f", 1, 2); px(x - 1, y, c, 3, 1); px(x, y - 1, c, 1, 3); px(x, y, "#ffef9a"); }
-  }, 12)],
-  [T.PLANKS]: [makeTile((px) => {
-    px(0, 0, "#b8864b", TS, TS);
-    for (let y = 0; y < TS; y += 4) { px(0, y, "#8a5f30", TS, 1); px(0, y + 1, "#c99a60", TS, 1); }
-    px(5, 1, "#8a5f30", 1, 3); px(11, 5, "#8a5f30", 1, 3); px(3, 9, "#8a5f30", 1, 3); px(9, 13, "#8a5f30", 1, 3);
+  [T.COAL]: [makeTile((px, r) => ore(px, r, ["#2b2b2b", "#4a4a4a", "#161616"]), 8)],
+  [T.IRON]: [makeTile((px, r) => ore(px, r, ["#d8af93", "#f0d2bc", "#a07a62"]), 9)],
+  [T.GEM]: [makeTile((px, r) => ore(px, r, ["#4ee6d8", "#d0fffa", "#1d9c92"]), 10)],
+  [T.FLOWER]: [grassTile(12, (px) => {
+    for (const [x, y, c, d] of [[3, 4, "#ff4d5e", "#c22a3a"], [11, 3, "#ffd23f", "#d89b00"], [6, 11, "#ffffff", "#c8c8d8"], [12, 11, "#5ab0ff", "#2f6fd0"]]) {
+      px(x, y + 1, "#2f6e20", 1, 3); px(x - 1, y, c, 3, 1); px(x, y - 1, c, 1, 3); px(x + 1, y, d); px(x, y + 1, d); px(x, y, "#fff1a1");
+    }
+  })],
+  [T.PLANKS]: [makeTile((px, r) => {
+    noiseFill(px, r, ["#a8824c", "#b48d56", "#9c7742", "#bd965e"], 0, 0, TS, TS, 0.75);
+    for (let y = 0; y < TS; y += 4) { px(0, y + 3, "#6e5130", TS, 1); px(0, y, "#c9a46a", TS, 1); }
+    for (const [x, y] of [[5, 0], [12, 4], [3, 8], [10, 12]]) px(x, y, "#6e5130", 1, 3);
+    for (const [x, y] of [[1, 1], [14, 5], [7, 9], [1, 13]]) px(x, y, "#5a4126");
   }, 13)],
-  [T.BRICK]: [makeTile((px) => {
-    px(0, 0, "#a65a45", TS, TS);
-    for (let y = 0; y < TS; y += 4) { px(0, y, "#d9d0c4", TS, 1); const o = (y / 4) % 2 ? 4 : 0; for (let x = o; x < TS; x += 8) px(x, y, "#d9d0c4", 1, 4); }
+  [T.BRICK]: [makeTile((px, r) => {
+    px(0, 0, "#b5ab9c", TS, TS);
+    for (let row = 0; row < 4; row++) {
+      const o = row % 2 ? 4 : 0;
+      for (let bx = -o; bx < TS; bx += 8) {
+        const base = ["#a4503c", "#984a37", "#ad5a44"][Math.floor(r() * 3)];
+        const x = Math.max(0, bx + 1), w = Math.min(TS, bx + 8) - x;
+        if (w <= 0) continue;
+        noiseFill(px, r, [base, base, "#8e4231", "#b8644d"], x, row * 4, w, 3, 0.6);
+        px(x, row * 4, "#c2705a", w, 1);
+      }
+    }
   }, 14)],
-  [T.BENCH]: [makeTile((px) => {
-    px(0, 0, "#8a5f30", TS, TS); px(1, 1, "#c99a60", 14, 6); px(1, 7, "#6b4426", 14, 1);
-    px(2, 8, "#6b4426", 2, 7); px(12, 8, "#6b4426", 2, 7); px(4, 3, "#9a9a9a", 4, 1); px(5, 2, "#6b4426", 1, 4); px(10, 2, "#c0c0c0", 3, 2);
+  [T.BENCH]: [makeTile((px, r) => {
+    // Banco de trabajo visto desde arriba: tablero con cuadrícula y herramientas.
+    noiseFill(px, r, ["#a8824c", "#b48d56", "#9c7742"], 0, 0, TS, TS, 0.75);
+    px(0, 0, "#6e5130", TS, 1); px(0, TS - 1, "#4a3620", TS, 1); px(0, 0, "#6e5130", 1, TS); px(TS - 1, 0, "#4a3620", 1, TS);
+    px(2, 2, "#c9a46a", 12, 12);
+    for (let k = 2; k <= 14; k += 4) { px(k, 2, "#7a5a35", 1, 12); px(2, k, "#7a5a35", 12, 1); }
+    px(3, 3, "#9a9a9a", 3, 1); px(4, 4, "#6e5130", 1, 2);       // martillo
+    px(11, 11, "#d0d0d0", 2, 2); px(10, 10, "#6e5130");         // sierra
   }, 15)],
   [T.FIRE]: [0, 1].map((f) => makeTile((px, r) => {
-    speckle(px, r, "#8a6a45", ["#7d5f3d", "#967451"], 20);
-    px(3, 12, "#6b4426", 10, 2); px(5, 11, "#8a5a32", 6, 2);
+    noiseFill(px, r, ["#7a5a3a", "#6e5034", "#86653f", "#5e452c"]);
+    px(2, 11, "#5a3e24", 12, 3); px(3, 10, "#7a5532", 10, 1); px(2, 12, "#3e2a17", 12, 1);
     const h = f ? 9 : 8;
-    px(5, 12 - h + 2, "#ff6a1f", 6, h - 1); px(6, 12 - h, "#ffb02e", 4, h - 2); px(7, 12 - h + 2, "#fff1a1", 2, h - 5);
+    px(4, 12 - h + 2, "#e8541a", 8, h - 1); px(5, 12 - h, "#ff9a1f", 6, h - 1); px(6, 12 - h + 2, "#ffd84a", 4, h - 4); px(7, 12 - h + 4, "#fff6c8", 2, h - 7);
   }, 16 + f)),
-  [T.DIRT]: [makeTile((px, r) => speckle(px, r, "#8a6a45", ["#7d5f3d", "#967451", "#a07c55"], 34), 18)],
+  [T.DIRT]: [makeTile((px, r) => { noiseFill(px, r, ["#8b6342", "#7a5638", "#96704c", "#6e4c31", "#a07a55"]); px(4, 9, "#8a8a8a"); px(12, 3, "#7a7a7a"); }, 18)],
   [T.ALTAR]: [0, 1].map((f) => makeTile((px, r) => {
-    speckle(px, r, "#2b2240", ["#231b36", "#352a4f"], 30);
-    px(2, 2, "#4a3d6e", 12, 12); px(3, 3, "#1d1630", 10, 10);
+    noiseFill(px, r, ["#2b2240", "#231b36", "#352a4f", "#1d1630"]);
+    bevel(px, "#4a3d6e", "#120d1e");
+    px(3, 3, "#1d1630", 10, 10);
     px(7, 4, f ? "#d6b8ff" : "#b48cff", 2, 8); px(5, 7, f ? "#d6b8ff" : "#b48cff", 6, 2);
     px(7, 7, "#ff7a2e", 2, 2);
   }, 19 + f)),
+};
+
+// Cara frontal de los bloques (se ve debajo de un bloque cuando delante hay suelo).
+function makeSide(fn, seed) {
+  const c = document.createElement("canvas");
+  c.width = TS; c.height = 6;
+  const ctx = c.getContext("2d");
+  const r = mulberry32(seed);
+  fn((x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }, r);
+  return c;
+}
+const SIDE_ART = {
+  rock: makeSide((px, r) => { noiseFill(px, r, ["#5e5e64", "#55555b", "#68686e", "#4c4c52"], 0, 0, TS, 6, 0.4); px(0, 0, "#3a3a40", TS, 1); px(0, 5, "#2e2e33", TS, 1); for (const x of [4, 11]) px(x, 1, "#45454b", 1, 4); }, 51),
+  [T.PLANKS]: makeSide((px, r) => { noiseFill(px, r, ["#7a5a35", "#86643c", "#6e5130"], 0, 0, TS, 6, 0.8); px(0, 0, "#4a3620", TS, 1); px(0, 3, "#5a4126", TS, 1); }, 52),
+  [T.BRICK]: makeSide((px, r) => { px(0, 0, "#7d776d", TS, 6); for (let bx = 0; bx < TS; bx += 8) noiseFill(px, r, ["#7c3a2b", "#713526", "#86412f"], bx + 1, 1, 7, 2, 0.6); for (let bx = 4; bx < TS; bx += 8) noiseFill(px, r, ["#7c3a2b", "#713526"], bx - 3 < 0 ? 0 : bx - 3, 4, 7, 2, 0.6); px(0, 0, "#4e4a44", TS, 1); }, 53),
+  [T.BENCH]: makeSide((px, r) => { noiseFill(px, r, ["#7a5a35", "#86643c"], 0, 0, TS, 6, 0.8); px(0, 0, "#4a3620", TS, 1); px(3, 2, "#c0c0c0", 3, 1); px(4, 3, "#6e5130", 1, 2); px(10, 2, "#9a9a9a", 3, 2); }, 54),
 };
 
 /* ---------- Arte extra: variantes del suelo y árboles grandes ---------- */
@@ -450,65 +676,117 @@ function hash(x, y, k = 0) {
 const GROUND_VARIANTS = {
   [T.GRASS]: [
     TILE_ART[T.GRASS][0],
-    makeTile((px, r) => { speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a", "#4f9a42"], 34); px(3, 11, "#9a9a8a", 2, 1); px(4, 10, "#b5b5a5"); px(11, 4, "#9a9a8a"); }, 31),
-    makeTile((px, r) => { speckle(px, r, "#62b252", ["#57a248", "#71c25f", "#4f9a42"], 30); px(9, 9, "#f2efe6", 3, 1); px(9, 10, "#c9483a", 3, 1); px(10, 11, "#e8e0cc", 1, 2); }, 32),
-    makeTile((px, r) => { speckle(px, r, "#5aa94b", ["#4f9a42", "#6bbb5a"], 30); for (const [x, y] of [[3, 3], [12, 6], [6, 12]]) { px(x, y, "#3e8a3a", 3, 1); px(x + 1, y - 1, "#3e8a3a"); px(x + 1, y + 1, "#3e8a3a"); } }, 33),
-    makeTile((px, r) => { speckle(px, r, "#5fae4f", ["#57a248", "#6bbb5a"], 26); px(4, 6, "#ffffff"); px(12, 10, "#ffd23f"); px(8, 13, "#ffffff"); }, 34),
+    grassTile(31, (px) => { px(3, 11, "#8e8e86", 2, 1); px(4, 10, "#b0b0a8"); px(11, 4, "#8e8e86"); }),
+    grassTile(32, (px) => { px(9, 9, "#f2efe6", 3, 1); px(9, 10, "#c9483a", 3, 1); px(10, 11, "#e8e0cc", 1, 2); }),
+    grassTile(33, (px) => { for (const [x, y] of [[3, 3], [12, 6], [6, 12]]) { px(x, y, "#3f7f2a", 1, 2); px(x + 1, y - 1, "#3f7f2a", 1, 3); px(x + 2, y, "#3f7f2a", 1, 2); } }),
+    grassTile(34, (px) => { px(4, 6, "#ffffff"); px(12, 10, "#ffd23f"); px(8, 13, "#ffffff"); }),
   ],
   [T.SAND]: [
     TILE_ART[T.SAND][0],
-    makeTile((px, r) => { speckle(px, r, "#e8d48f", ["#dcc67f", "#f3e2a6"], 28); px(5, 6, "#ffd8c8", 2, 2); px(6, 5, "#f0b8a8"); }, 35),
-    makeTile((px, r) => { speckle(px, r, "#ead796", ["#dcc67f", "#f3e2a6", "#cbb46a"], 34); px(11, 10, "#a89a7a", 2, 1); px(3, 12, "#a89a7a"); }, 36),
+    makeTile((px, r) => { noiseFill(px, r, ["#dccf8f", "#e3d79c", "#d3c482", "#e9dea8"]); px(5, 6, "#ffd8c8", 2, 2); px(6, 5, "#f0b8a8"); px(5, 7, "#d89a8a"); }, 35),
+    makeTile((px, r) => { noiseFill(px, r, ["#dccf8f", "#e3d79c", "#cbbb76", "#e9dea8"]); px(11, 10, "#a89a7a", 2, 1); px(3, 12, "#a89a7a"); }, 36),
   ],
   [T.DIRT]: [
     TILE_ART[T.DIRT][0],
-    makeTile((px, r) => { speckle(px, r, "#856543", ["#7d5f3d", "#967451", "#6e5235"], 36); px(4, 9, "#9a9a8a", 2, 2); px(12, 4, "#6b5034", 2, 1); }, 37),
+    makeTile((px, r) => { noiseFill(px, r, ["#856043", "#7a5638", "#96704c", "#6e4c31"]); px(4, 9, "#8a8a8a", 2, 2); px(4, 9, "#a8a8a8"); px(12, 4, "#5a3e28", 2, 1); }, 37),
   ],
   [T.TALL]: [
     TILE_ART[T.TALL][0],
     makeTile((px, r) => {
-      speckle(px, r, "#4a9140", ["#4a9140", "#57a248"], 16);
-      for (let i = 0; i < 10; i++) { const x = 1 + ((i * 3 + 2) % 14), y = 3 + ((i * 5) % 10); px(x, y, "#2a702a", 1, 5); px(x + 1, y + 1, "#8ad874", 1, 3); }
+      for (let i = 0; i < 8; i++) {
+        const x = 1 + ((i * 3 + 1) % 14), h = 7 + Math.floor(r() * 5), y = 15 - h;
+        px(x, y + 1, "#3a8226", 1, h); px(x + 1, y + 3, "#2a661c", 1, h - 3); px(x, y, "#9ae672"); px(x - 1, y + 3, "#5aad3a", 1, 2);
+      }
     }, 38),
   ],
 };
 
-function treeArt(ops) { return gridToCanvas(rasterize(ops, 32), 32, 1, "#13361a"); }
+const shadeHex = (hex, k) => { const [r, g, b] = shadeCol(parseColor(hex), k); return `rgb(${r | 0},${g | 0},${b | 0})`; };
+
+/* Árboles de bloques (32×32): copa como un cubo de hojas con su cara de arriba más clara
+ * y la de delante más oscura, y tronco de corteza. */
+function blockTree(seed, { leaf, leafTop, leafSide, trunk, bark, fruit, tall }) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const ctx = c.getContext("2d");
+  const r = mulberry32(seed);
+  const px = (x, y, col, w = 1, h = 1) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+  const leaves = (x0, y0, w, h, pal) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+      // Esquinas recortadas y algún hueco entre las hojas.
+      const corner = (x === x0 || x === x0 + w - 1) && (y === y0 || y === y0 + h - 1);
+      if (corner) continue;
+      const k = r();
+      // Algunas hojas más oscuras o más claras, en grupitos, para que se note la textura.
+      px(x, y, k < 0.12 ? shadeHex(pal[0], -0.25) : k > 0.93 ? shadeHex(pal[0], 0.2) : pal[Math.floor(r() * pal.length)]);
+    }
+  };
+  // Tronco con corteza.
+  px(13, 18, trunk, 6, 13);
+  for (let y = 18; y < 31; y++) for (let x = 13; x < 19; x++) if (r() < 0.35) px(x, y, bark);
+  px(13, 18, bark, 1, 13); px(17, 19, bark, 1, 11);
+  px(12, 30, bark, 8, 1);
+  if (tall) {
+    // Pino: tres cubos de hojas apilados, cada uno más pequeño.
+    leaves(6, 14, 20, 6, leafSide); leaves(6, 10, 20, 5, leaf); leaves(7, 9, 18, 2, leafTop);
+    leaves(9, 6, 14, 5, leaf); leaves(10, 5, 12, 2, leafTop);
+    leaves(12, 1, 8, 5, leaf); leaves(13, 0, 6, 2, leafTop);
+  } else {
+    leaves(3, 15, 26, 6, leafSide);  // cara de delante (sombra)
+    leaves(3, 3, 26, 13, leaf);      // cuerpo de la copa
+    leaves(4, 2, 24, 4, leafTop);    // cara de arriba (luz)
+    leaves(10, 0, 12, 3, leafTop);
+  }
+  if (fruit) for (const [x, y] of [[7, 8], [20, 6], [12, 12], [24, 13], [16, 4], [5, 14]]) { px(x, y, fruit, 2, 2); px(x, y, "#ffb0a8"); }
+  // Contorno oscuro.
+  const img = ctx.getImageData(0, 0, 32, 32), d = img.data, out = new Uint8ClampedArray(d);
+  const solid = (x, y) => x >= 0 && y >= 0 && x < 32 && y < 32 && d[(y * 32 + x) * 4 + 3] > 0;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    if (solid(x, y) || !(solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) continue;
+    out.set([16, 40, 20, 255], (y * 32 + x) * 4);
+  }
+  ctx.putImageData(new ImageData(out, 32, 32), 0, 0);
+  return c;
+}
 const TREES = [
-  treeArt([["e", 16, 21, 9, 4, "#23652a"], ["r", 14, 22, 4, 9, "#6b4426"], ["r", 15, 22, 1, 9, "#8a5a32"], ["r", 12, 30, 8, 1, "#5a381f"],
-    ["e", 16, 13, 12, 10, "#2c7a32"], ["e", 10, 11, 6, 5, "#3f9a40"], ["e", 21, 10, 6, 5, "#3f9a40"], ["e", 15, 7, 6, 4, "#4fae4a"], ["e", 16, 18, 9, 3, "#25682b"],
-    ["e", 9, 9, 2, 1, "#7fd06a"], ["e", 19, 6, 2, 1, "#7fd06a"], ["e", 14, 5, 2, 1, "#8ee07a"]]),
-  treeArt([["r", 15, 24, 3, 7, "#5a381f"], ["r", 16, 24, 1, 7, "#7a4f2a"], ["t", 16, 26, 4, 27, 28, 27, "#1f5e3a"],
-    ["t", 16, 13, 5, 26, 27, 26, "#23683f"], ["t", 16, 7, 7, 19, 25, 19, "#2b7a48"], ["t", 16, 1, 9, 12, 23, 12, "#358a54"],
-    ["t", 16, 3, 13, 10, 16, 10, "#56b070"], ["t", 15, 10, 11, 17, 15, 17, "#3f9a5a"]]),
-  treeArt([["r", 14, 22, 4, 9, "#6b4426"], ["r", 15, 22, 1, 9, "#8a5a32"], ["e", 16, 13, 12, 10, "#3a8a36"], ["e", 11, 10, 6, 5, "#4fae4a"], ["e", 21, 11, 5, 4, "#4fae4a"], ["e", 16, 7, 5, 3, "#63c25a"],
-    ["r", 9, 12, 2, 2, "#e23b3b"], ["r", 20, 9, 2, 2, "#e23b3b"], ["r", 14, 17, 2, 2, "#e23b3b"], ["r", 22, 15, 2, 2, "#e23b3b"], ["r", 17, 12, 2, 2, "#ff6a5a"], ["e", 13, 6, 2, 1, "#8ee07a"]]),
+  blockTree(61, { leaf: ["#3f8f2f", "#468f34", "#37802a", "#4f9e3a"], leafTop: ["#5fae44", "#6cbb4e", "#58a33f"], leafSide: ["#2c6a22", "#2f7024", "#265e1e"], trunk: "#6b4a2b", bark: "#4f361f" }),
+  blockTree(62, { leaf: ["#2e6a3c", "#2a6237", "#336f40"], leafTop: ["#3f8550", "#478c56"], leafSide: ["#1f4c2b", "#234f2e"], trunk: "#4f3520", bark: "#3a2616", tall: true }),
+  blockTree(63, { leaf: ["#4a9a36", "#52a33c", "#42902f"], leafTop: ["#6cbf4e", "#77c858"], leafSide: ["#327428", "#2f6e25"], trunk: "#6b4a2b", bark: "#4f361f", fruit: "#d8303a" }),
 ];
 GROUND_VARIANTS[T.STONE] = [
   TILE_ART[T.STONE][0],
-  makeTile((px, r) => { stoneBase(px, r); px(3, 3, "#5f8a4a", 3, 2); px(4, 2, "#78a35c", 2, 1); px(11, 12, "#5f8a4a", 2, 1); }, 41),
-  makeTile((px, r) => { stoneBase(px, r); px(4, 9, "#6a6a6a", 1, 4); px(5, 12, "#6a6a6a", 3, 1); px(10, 3, "#6a6a6a", 1, 3); px(11, 5, "#6a6a6a", 2, 1); }, 42),
-  makeTile((px, r) => { speckle(px, r, "#7f7f86", ["#73737a", "#8c8c93"], 40); px(2, 2, "#9a9aa2", 6, 5); px(3, 3, "#b0b0b8", 4, 1); px(2, 6, "#5c5c63", 6, 1); px(9, 9, "#9a9aa2", 5, 4); px(10, 10, "#b0b0b8", 3, 1); px(9, 12, "#5c5c63", 5, 1); }, 43),
+  makeTile((px, r) => { stoneBase(px, r); px(2, 3, "#5f8a3a", 4, 2); px(3, 2, "#78a35c", 2, 1); px(11, 12, "#5f8a3a", 3, 1); px(12, 11, "#6f9a48"); }, 41),
+  makeTile((px, r) => { stoneBase(px, r); px(4, 8, "#505050", 1, 4); px(5, 11, "#505050", 3, 1); px(10, 3, "#505050", 1, 3); px(11, 5, "#505050", 2, 1); }, 42),
+  makeTile((px, r) => {
+    // Adoquín: piedras sueltas con sus juntas.
+    px(0, 0, "#5a5a5a", TS, TS);
+    for (const [x, y, w, h] of [[1, 1, 6, 4], [8, 1, 7, 5], [1, 6, 4, 5], [6, 7, 5, 4], [12, 7, 3, 4], [1, 12, 7, 3], [9, 12, 6, 3]]) {
+      noiseFill(px, r, ["#8e8e8e", "#9a9a9a", "#828282"], x, y, w, h, 0.4); px(x, y, "#b0b0b0", w, 1); px(x, y + h - 1, "#6a6a6a", w, 1);
+    }
+  }, 43),
 ];
 const treeVariant = (x, y) => { const h = hash(x, y, 7) % 10; return h < 6 ? 0 : h < 9 ? 1 : 2; };
 
 /* ---------- Arte: personaje e iconos ---------- */
 
 function playerFrame(dir, step) {
-  // Personaje original: pelo castaño, camiseta verde azulada, pantalón azul.
+  // Personaje original: explorador con pañuelo rojo, chaqueta naranja y mochila.
   const c = document.createElement("canvas");
   c.width = c.height = TS;
   const x = c.getContext("2d");
   const px = (a, b, col, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
-  const skin = "#f1c7a0", hair = "#5a3a22", shirt = "#2bb3a3", pants = "#2f4c9a", shoe = "#3a2a20";
+  const skin = "#e8b48a", hair = "#2a1d18", shirt = "#e8772e", pants = "#4a3d5c", shoe = "#2a1d18";
   px(4, 1, hair, 8, 3);                    // pelo
   px(4, 4, skin, 8, 4);                    // cara
-  if (dir === "up") px(4, 4, hair, 8, 3);
-  else if (dir === "down") { px(6, 5, "#1b1b1b"); px(9, 5, "#1b1b1b"); px(4, 3, hair, 8, 1); }
-  else if (dir === "left") { px(5, 5, "#1b1b1b"); px(9, 3, hair, 3, 3); }
-  else { px(10, 5, "#1b1b1b"); px(4, 3, hair, 3, 3); }
-  px(3, 8, shirt, 10, 4);                  // camiseta
-  px(3, 8, "#1f8f83", 1, 4); px(12, 8, "#1f8f83", 1, 4);
+  px(4, 2, "#d8323a", 8, 1);               // pañuelo
+  if (dir === "up") { px(4, 4, hair, 8, 3); px(5, 1, "#d8323a", 1, 3); px(4, 3, "#a8242c", 2, 1); }
+  else if (dir === "down") { px(6, 5, "#1b1b1b"); px(9, 5, "#1b1b1b"); px(6, 7, "#b8785a", 3, 1); }
+  else if (dir === "left") { px(5, 5, "#1b1b1b"); px(9, 3, hair, 3, 3); px(11, 2, "#d8323a", 2, 2); }
+  else { px(10, 5, "#1b1b1b"); px(4, 3, hair, 3, 3); px(3, 2, "#d8323a", 2, 2); }
+  px(3, 8, shirt, 10, 4);                  // chaqueta
+  px(3, 8, "#b8561e", 1, 4); px(12, 8, "#b8561e", 1, 4); px(7, 8, "#f6d25a", 2, 1);
+  if (dir === "up") { px(5, 8, "#7a5532", 6, 4); px(5, 8, "#9a7040", 6, 1); }  // mochila
+  else { px(4, 8, "#7a5532", 1, 4); px(11, 8, "#7a5532", 1, 4); }             // tirantes
   px(2 + (step ? 0 : 0), 9, skin, 1, 3); px(13, 9, skin, 1, 3);
   const l = step === 1 ? 1 : 0, rgt = step === 2 ? 1 : 0;
   px(4, 12, pants, 4, 3 - l); px(8, 12, pants, 4, 3 - rgt);
@@ -813,7 +1091,7 @@ function resize() {
 }
 addEventListener("resize", resize);
 
-const anim = { fromX: 0, fromY: 0, start: 0, moving: false, step: 0 };
+const anim = { fromX: 0, fromY: 0, start: 0, moving: false, step: 0, dur: STEP_MS };
 
 /* Efectos del mundo (en coordenadas de casilla). */
 const particles = [];  // { x, y, vx, vy, life, max, color }
@@ -1013,7 +1291,7 @@ function render(now) {
   // Posición interpolada del jugador (movimiento suave entre casillas).
   let px = S.player.x, py = S.player.y;
   if (anim.moving) {
-    const k = clamp((now - anim.start) / STEP_MS, 0, 1);
+    const k = clamp((now - anim.start) / (anim.dur || STEP_MS), 0, 1);
     px = anim.fromX + (S.player.x - anim.fromX) * k;
     py = anim.fromY + (S.player.y - anim.fromY) * k;
   }
@@ -1044,7 +1322,7 @@ function render(now) {
       ctx.drawImage(variants[hash(tx, ty) % 2], dx + sway, dy, size, size);
     } else if (variants) {
       const h = hash(tx, ty);
-      ctx.drawImage(variants[t === T.GRASS ? (h % 7 < 3 ? 0 : 1 + (h % 4)) % variants.length : h % variants.length], dx, dy, size, size);
+      ctx.drawImage(variants[t === T.GRASS ? [0, 0, 0, 0, 0, 0, 1, 3, 4, (h >> 9) % 5 ? 0 : 2][h % 10] : h % variants.length], dx, dy, size, size);
     } else {
       const art = TILE_ART[t];
       ctx.drawImage(art[art.length > 1 ? frame : 0], dx, dy, size, size);
@@ -1067,14 +1345,17 @@ function render(now) {
       // Montaña con relieve: borde de luz arriba y acantilado delante.
       if (!isRock(tileAt(tx, ty - 1))) { ctx.fillStyle = "#ffffff30"; ctx.fillRect(dx, dy, size, scale); }
       if (!isRock(tileAt(tx, ty + 1))) {
-        const fh = Math.round(size * 0.38);
-        ctx.fillStyle = "#3f3f46"; ctx.fillRect(dx, dy + size - fh, size, fh);
-        ctx.fillStyle = "#2c2c33";
-        for (let k = 2; k < 16; k += 5) ctx.fillRect(dx + ((k + hash(tx, ty) % 3) * scale), dy + size - fh, scale, fh);
-        ctx.fillStyle = "#00000033"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.22));
+        // Cara de delante del cubo de piedra.
+        const fh = Math.round(size * 6 / 16);
+        ctx.drawImage(SIDE_ART.rock, dx, dy + size - fh, size, fh);
+        ctx.fillStyle = "#00000038"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.22));
       }
-    } else if (t === T.BRICK || t === T.PLANKS) {
-      if (WALKABLE.has(tileAt(tx, ty + 1))) { ctx.fillStyle = "#0000002a"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.18)); }
+    } else if (SIDE_ART[t]) {
+      if (WALKABLE.has(tileAt(tx, ty + 1))) {
+        const fh = Math.round(size * 6 / 16);
+        ctx.drawImage(SIDE_ART[t], dx, dy + size - fh, size, fh);
+        ctx.fillStyle = "#0000002e"; ctx.fillRect(dx, dy + size, size, Math.round(size * 0.18));
+      }
     }
     if (t === T.FIRE || t === T.ALTAR) fires.push([dx + size / 2, dy + size / 2]);
   }
@@ -1151,7 +1432,7 @@ function render(now) {
       ctx.fillStyle = "#00000040";
       ctx.beginPath(); ctx.ellipse(ppx + size / 2, ppy + size * 0.96, size * 0.3, size * 0.09, 0, 0, Math.PI * 2); ctx.fill();
       const tallUnder = tileAt(S.player.x, S.player.y) === T.TALL && !anim.moving;
-      const hop = anim.moving ? Math.round(Math.abs(Math.sin(((now - anim.start) / STEP_MS) * Math.PI)) * scale) : 0;
+      const hop = anim.moving ? Math.round(Math.abs(Math.sin(((now - anim.start) / (anim.dur || STEP_MS)) * Math.PI)) * scale) : 0;
       ctx.drawImage(pf, 0, 0, TS, tallUnder ? 11 : TS, ppx, ppy - hop, size, tallUnder ? size * 11 / 16 : size);
     }
   }
@@ -1270,7 +1551,7 @@ function facing() {
 }
 
 function updateMovement(now) {
-  if (anim.moving && now - anim.start >= STEP_MS) {
+  if (anim.moving && now - anim.start >= anim.dur) {
     anim.moving = false;
     onStep();
   }
@@ -1287,6 +1568,7 @@ function updateMovement(now) {
   if (!WALKABLE.has(tileAt(nx, ny))) return;
   anim.fromX = S.player.x; anim.fromY = S.player.y;
   anim.start = now; anim.moving = true; anim.step++;
+  anim.dur = running ? RUN_MS : STEP_MS;
   const under = tileAt(S.player.x, S.player.y);
   if (under === T.SAND || under === T.DIRT) for (let i = 0; i < 3; i++) particles.push({ x: S.player.x + 0.5, y: S.player.y + 0.92, vx: (Math.random() - 0.5) * 1.5, vy: -0.6 - Math.random(), life: 0, max: 0.35, color: under === T.SAND ? "#f3e2a6" : "#a07c55" });
   S.player.x = nx; S.player.y = ny;
@@ -1406,6 +1688,41 @@ function bindButton(el, down, up) {
 }
 bindButton($("#btn-a"), () => { holdA = true; doAction(); }, () => (holdA = false));
 bindButton($("#btn-b"), () => doPlace());
+bindButton($("#btn-x"), toggleRun);
+bindButton($("#btn-y"), nextItem);
+bindButton($("#btn-zoom"), () => cycleZoom());
+bindButton($("#btn-home"), goHome);
+
+/* Botones extra: correr, cambiar de bloque y volver a la hoguera. */
+let running = false;
+function toggleRun() {
+  running = !running;
+  $("#btn-x").classList.toggle("active", running);
+  toast(running ? "🏃 Corriendo" : "🚶 Andando", 1200);
+  vibrate(15);
+}
+function nextItem() {
+  const placeable = Object.keys(S.inv).filter((id) => ITEMS[id] && ITEMS[id].place !== undefined && count(id) > 0);
+  if (!placeable.length) return toast("No tienes bloques para poner. ¡Tala o pica primero!");
+  S.sel = placeable[(placeable.indexOf(S.sel) + 1) % placeable.length];
+  renderHotbar();
+  toast(ITEMS[S.sel].name + " en la mano", 1200);
+  sfx("step");
+}
+function goHome() {
+  if (modalOpen()) return;
+  if (!S.home) return toast("Aún no has descansado en ninguna hoguera");
+  if (S.player.x === S.home.x && S.player.y === S.home.y) return toast("Ya estás en tu hoguera");
+  if (!confirm("¿Volver a tu última hoguera?")) return;
+  S.player.x = S.home.x; S.player.y = S.home.y;
+  anim.moving = false;
+  mining.hits = 0;
+  markExplored(S.player.x, S.player.y);
+  sfx("heal");
+  burst(S.player.x, S.player.y, T.FIRE, 14);
+  toast("🏕️ De vuelta en tu hoguera");
+  save();
+}
 
 const KEYS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", KeyW: "up", KeyS: "down", KeyA: "left", KeyD: "right" };
 const keysDown = new Set();
@@ -1413,10 +1730,14 @@ addEventListener("keydown", (e) => {
   if (KEYS[e.code]) { keysDown.add(KEYS[e.code]); setHeld(KEYS[e.code]); e.preventDefault(); }
   else if ((e.code === "KeyZ" || e.code === "Space" || e.code === "Enter") && !e.repeat) { holdA = true; doAction(); }
   else if (e.code === "KeyX" && !e.repeat) doPlace();
+  else if (e.code === "KeyC" && !e.repeat) toggleRun();
+  else if (e.code === "KeyV" && !e.repeat) nextItem();
+  else if ((e.code === "ShiftLeft" || e.code === "ShiftRight") && !e.repeat && !running) toggleRun();
 });
 addEventListener("keyup", (e) => {
   if (KEYS[e.code]) { keysDown.delete(KEYS[e.code]); setHeld([...keysDown].pop() || null); }
   if (e.code === "KeyZ" || e.code === "Space" || e.code === "Enter") holdA = false;
+  if ((e.code === "ShiftLeft" || e.code === "ShiftRight") && running) toggleRun();
 });
 
 function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
@@ -1696,10 +2017,10 @@ function wildPool() {
     if (t === T.WATER || t === T.SAND) water = true;
     if (t === T.STONE || t === T.COAL || t === T.IRON || t === T.DIRT) rock = true;
   }
-  let pool = rock ? ["pedron", "topin", "cenizo", "brasito", "topin"]
-    : water ? ["gotin", "corali", "plumi", "corali"]
+  let pool = rock ? ["pedron", "topin", "cenizo", "brasito", "topin", "hongui"]
+    : water ? ["gotin", "corali", "plumi", "corali", "tortuli", "tortuli"]
       : ["brotin", "musguito", "plumi", "chispin", "musguito", "plumi"];
-  if (isNight()) pool = pool.concat(["lumi", "voltibicho", "lumi"]);
+  if (isNight()) pool = pool.concat(["lumi", "voltibicho", "lumi", "polillux", "hongui"]);
   return pool;
 }
 
@@ -1754,7 +2075,7 @@ async function battle(foe, opts = {}) {
   $("#battle").classList.toggle("night", isNight());
   $("#battle").classList.toggle("boss", B.boss);
   drawMonInto($("#foe-sprite"), foe.sp);
-  drawMonInto($("#ally-sprite"), B.ally.sp);
+  drawMonInto($("#ally-sprite"), B.ally.sp, true);
   $("#foe-sprite").className = "mon enter";
   $("#ally-sprite").className = "mon enter";
   renderCards();
@@ -1859,7 +2180,7 @@ async function turn(action) {
   const ally = B.ally, foe = B.foe;
   if (action.kind === "switch") {
     B.ally = action.mon;
-    drawMonInto($("#ally-sprite"), B.ally.sp);
+    drawMonInto($("#ally-sprite"), B.ally.sp, true);
     restartAnim($("#ally-sprite"), "enter");
     renderCards();
     await say(`¡Vuelve! ¡Adelante, ${SPECIES[B.ally.sp].name}!`);
@@ -1906,7 +2227,7 @@ async function afterTurn() {
       return endBattle();
     }
     B.ally = next;
-    drawMonInto($("#ally-sprite"), next.sp);
+    drawMonInto($("#ally-sprite"), next.sp, true);
     restartAnim($("#ally-sprite"), "enter");
     renderCards();
     await say(`¡Adelante, ${SPECIES[next.sp].name}!`);
@@ -1957,7 +2278,7 @@ async function maybeEvolve(m) {
   m.hp = Math.max(1, Math.round(statsOf(m).maxhp * ratio));
   for (const [l, mv] of SPECIES[m.sp].learn) if (l <= m.lvl && !m.moves.includes(mv)) { m.moves.push(mv); if (m.moves.length > 4) m.moves.shift(); }
   S.seen[m.sp] = true;
-  if (el) { drawMonInto(el, m.sp); renderCards(); }
+  if (el) { drawMonInto(el, m.sp, true); renderCards(); }
   await say(`¡${from} ha evolucionado en ${SPECIES[m.sp].name}!`, 1500);
 }
 

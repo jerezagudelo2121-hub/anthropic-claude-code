@@ -69,7 +69,7 @@ button { font: inherit; color: inherit; }
 .dpad .left { left: 0; border-radius: 10px 0 0 10px; }
 .dpad .right { right: 0; border-radius: 0 10px 10px 0; }
 .dpad .arm.on { filter: brightness(1.6); }
-.actions { position: fixed; right: calc(18px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); width: min(46vw, 190px); height: min(36vw, 150px); }
+.actions { position: fixed; right: calc(14px + var(--safe-r)); bottom: calc(20px + var(--safe-b)); width: min(46vw, 196px); height: min(46vw, 196px); }
 .act {
   position: absolute; width: min(19vw, 78px); aspect-ratio: 1; border-radius: 50%; border: 2px solid #0008;
   display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
@@ -77,8 +77,19 @@ button { font: inherit; color: inherit; }
 }
 .act span { font-weight: 900; font-size: 24px; line-height: 1; }
 .act small { font-size: 10px; font-weight: 700; opacity: .9; }
-.act.a { right: 0; top: 0; background: radial-gradient(circle at 35% 30%, #9cf59a, #3fae46 60%, #23722b); color: #062b0b; }
-.act.b { left: 0; bottom: 0; background: radial-gradient(circle at 35% 30%, #ffd98a, #e9a72a 60%, #a86c0d); color: #3a2400; }
+.act.a { right: 0; top: calc(50% - min(17vw, 70px) / 2); background: radial-gradient(circle at 35% 30%, #9cf59a, #3fae46 60%, #23722b); color: #062b0b; }
+.act.b { left: calc(50% - min(17vw, 70px) / 2); bottom: 0; background: radial-gradient(circle at 35% 30%, #ffd98a, #e9a72a 60%, #a86c0d); color: #3a2400; }
+.act.x { left: calc(50% - min(17vw, 70px) / 2); top: 0; background: radial-gradient(circle at 35% 30%, #a9d8ff, #3f8fe0 60%, #1f569a); color: #04203f; }
+.act.y { left: 0; top: calc(50% - min(17vw, 70px) / 2); background: radial-gradient(circle at 35% 30%, #ffb3c8, #e0507a 60%, #9a2448); color: #3a0414; }
+.act.x.active { box-shadow: inset 0 3px 0 #ffffff44, 0 5px 0 #0008, 0 0 0 3px #a9d8ff, 0 0 18px #6fb8ff; }
+.act { width: min(17vw, 70px); }
+.act span { font-size: 21px; }
+.quick { position: fixed; right: calc(14px + var(--safe-r)); bottom: calc(26px + var(--safe-b) + min(46vw, 196px)); display: flex; gap: 8px; }
+.qbtn {
+  width: 44px; height: 44px; border-radius: 14px; border: 2px solid #0008; font-size: 20px;
+  background: linear-gradient(180deg, #2c4a33, #1a2e20); box-shadow: inset 0 2px 0 #ffffff22, 0 4px 0 #0008; opacity: .92;
+}
+.qbtn:active { transform: translateY(2px); box-shadow: inset 0 2px 0 #ffffff22, 0 1px 0 #0008; }
 .act.on, .act:active { transform: translateY(3px) scale(.96); box-shadow: inset 0 3px 0 #ffffff44, 0 2px 0 #0008; }
 
 /* ---------- Mensajes ---------- */
@@ -175,8 +186,12 @@ button { font: inherit; color: inherit; }
 @media (orientation: landscape) and (max-height: 500px) {
   .hotbar { top: auto; bottom: calc(8px + var(--safe-b)); }
   .dpad { --s: min(32vh, 150px); }
-  .actions { width: min(40vh, 170px); height: min(32vh, 130px); }
-  .act { width: min(16vh, 68px); }
+  .actions { width: min(44vh, 176px); height: min(44vh, 176px); }
+  .act { width: min(15vh, 62px); }
+  .act.a { top: calc(50% - min(15vh, 62px) / 2); }
+  .act.b, .act.x { left: calc(50% - min(15vh, 62px) / 2); }
+  .act.y { top: calc(50% - min(15vh, 62px) / 2); }
+  .quick { bottom: calc(10px + var(--safe-b)); right: calc(22px + var(--safe-r) + min(44vh, 176px)); }
   .battle { flex-direction: row; }
   .battle-box { width: 42%; border-top: 0; border-left: 4px solid #2b3a2d; min-height: 0; justify-content: center; }
 }
@@ -240,3 +255,13 @@ button { font: inherit; color: inherit; }
 
 /* Botones: sin zoom por doble toque (iPhone). */
 button, a, .slot, .row-card, .bbtn, .starter, .quest-pill { touch-action: manipulation; }
+
+/* Criaturas en combate: respiran y tienen una plataforma de suelo debajo */
+.mon-wrap { position: relative; transform-origin: 50% 92%; animation: breathe 2.6s ease-in-out infinite; }
+.ally .mon-wrap { animation-delay: -1.3s; }
+.mon-wrap::before {
+  content: ""; position: absolute; left: -6%; right: -6%; bottom: -4%; height: 24%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(closest-side, #0000004d, #00000026 60%, transparent);
+}
+.foe .mon-wrap::before { bottom: -4%; }
+@keyframes breathe { 50% { transform: scale(1.035, .965); } }

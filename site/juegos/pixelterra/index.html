@@ -37,8 +37,14 @@
     <div class="arm up"></div><div class="arm down"></div><div class="arm left"></div><div class="arm right"></div>
   </div>
   <div class="actions">
+    <button class="act x" id="btn-x"><span>X</span><small>Correr</small></button>
+    <button class="act y" id="btn-y"><span>Y</span><small>Objeto</small></button>
     <button class="act b" id="btn-b"><span>B</span><small>Poner</small></button>
     <button class="act a" id="btn-a"><span>A</span><small>Usar</small></button>
+  </div>
+  <div class="quick">
+    <button class="qbtn" id="btn-zoom" aria-label="Acercar o alejar">🔍</button>
+    <button class="qbtn" id="btn-home" aria-label="Volver a la hoguera">🏕️</button>
   </div>
 </div>
 
@@ -61,10 +67,10 @@
   <div class="arena">
     <div class="foe">
       <div class="card" id="foe-card"></div>
-      <canvas class="mon" id="foe-sprite" width="48" height="48"></canvas>
+      <div class="mon-wrap"><canvas class="mon" id="foe-sprite" width="48" height="48"></canvas></div>
     </div>
     <div class="ally">
-      <canvas class="mon" id="ally-sprite" width="48" height="48"></canvas>
+      <div class="mon-wrap"><canvas class="mon" id="ally-sprite" width="48" height="48"></canvas></div>
       <div class="card" id="ally-card"></div>
     </div>
   </div>
@@ -85,12 +91,13 @@
       <summary>¿Cómo se juega?</summary>
       <ul>
         <li><b>Cruceta</b>: caminar. <b>A</b>: usar lo que tienes delante (talar, picar, hoguera…). <b>B</b>: poner el bloque que llevas en la mano.</li>
+        <li><b>X</b>: correr (tócalo para activarlo o quitarlo). <b>Y</b>: cambiar el bloque de la mano. <b>🔍</b>: acercar o alejar la cámara. <b>🏕️</b>: volver a tu última hoguera.</li>
         <li>En la <b>hierba alta</b> aparecen criaturas. Debilítalas y lánzales un <b>cubo</b> para capturarlas.</li>
         <li><b>🛠️ Fabricar</b>: tablas, palos, picos, cubos, hogueras… Algunas recetas necesitan estar junto a un <b>banco de trabajo</b>.</li>
         <li>Usa una <b>hoguera</b> (A) para curar a tu equipo y guardar el punto de regreso.</li>
         <li>De noche salen criaturas distintas y más fuertes. La partida se guarda sola.</li>
         <li>Sigue las <b>🎯 misiones</b> de arriba: te guían hasta el <b>Guardián Obsidiano</b>, el jefe final.</li>
-        <li>Brasito, Gotín y Brotín <b>evolucionan</b> al nivel 16.</li>
+        <li>Brasito, Gotín y Brotín <b>evolucionan</b> al nivel 16, y Chispín al 20. Hay criaturas nuevas: Hongui, Tortuli y Polillux (de noche).</li>
         <li><b>Toca dos veces el mapa</b> para alejar o acercar la cámara.</li>
       </ul>
     </details>
