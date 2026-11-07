@@ -6,14 +6,26 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const ICE_SERVERS = [
+const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  // Retransmisión (TURN) gratuita y pública: se usa solo si no se puede conectar directo,
-  // algo habitual con datos móviles. Puede cambiar o dejar de funcionar; para algo fiable,
-  // pon aquí tu propio servidor TURN (por ejemplo, de una cuenta gratuita de ExpressTURN o Metered).
+  // Retransmisión (TURN) gratuita y pública: se usa solo si no se puede conectar directo
+  // (datos móviles, algunos proveedores de internet). Pueden cambiar o dejar de funcionar;
+  // para algo fiable, cada uno puede poner el suyo en la web (🛰️ Retransmisión propia).
   { urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443", "turn:openrelay.metered.ca:443?transport=tcp"], username: "openrelayproject", credential: "openrelayproject" },
+  { urls: ["turn:freestun.net:3478", "turn:freestun.net:3478?transport=tcp"], username: "free", credential: "free" },
 ];
+// Tu servidor TURN (guardado en este móvil): { urls, username, credential }.
+function customTurn() {
+  const t = parseJSON(lsGet("gbaweb-turn") || "null");
+  return t && t.urls ? t : null;
+}
+function iceServers() {
+  const t = customTurn();
+  if (!t) return ICE_BASE;
+  const urls = String(t.urls).split(/[\s,]+/).filter(Boolean).map((u) => (/^turns?:/.test(u) ? u : "turn:" + u));
+  return [{ urls, username: t.username || "", credential: t.credential || "" }, ...ICE_BASE];
+}
 const SLOTS = 3;
 const COVER_EVERY_MS = 30000;
 const MAX_GUESTS = 4; // el adaptador inalámbrico admite hasta 5 consolas
@@ -1276,7 +1288,7 @@ const net = {
   newPeer(id) {
     if (!window.Peer) throw new Error("PeerJS no está disponible");
     // window.GBA_PEER_OPTIONS permite usar un servidor PeerJS propio ({ host, port, path, secure }).
-    const opts = { config: { iceServers: ICE_SERVERS }, debug: 1, ...window.GBA_PEER_OPTIONS };
+    const opts = { config: { iceServers: iceServers() }, debug: 1, ...window.GBA_PEER_OPTIONS };
     return id ? new Peer(id, opts) : new Peer(opts);
   },
 
@@ -1645,7 +1657,7 @@ async function diagnose() {
   // 2) Tipos de conexión posibles.
   const kinds = new Set();
   try {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServers() });
     pc.createDataChannel("prueba");
     pc.onicecandidate = (e) => { if (e.candidate && e.candidate.candidate) { const m = / typ (\w+)/.exec(e.candidate.candidate); if (m) kinds.add(m[1]); } };
     await pc.setLocalDescription(await pc.createOffer());
@@ -1662,12 +1674,37 @@ async function diagnose() {
     : "⚠️ Conexión directa: tu red no la deja (pasa con algunos datos móviles o redes de empresa/colegio).");
   lines.push(kinds.has("relay")
     ? "✅ Retransmisión: disponible (se usa si no se puede directo)."
-    : "⚠️ Retransmisión: no disponible ahora. Si la conexión directa falla, conectad los dos por Wi‑Fi.");
+    : "⚠️ Retransmisión: no disponible ahora. Si vuestra fila de amigo dice 🚧, poned una <b>🛰️ Retransmisión propia</b> (más abajo): es gratis.");
   if (server === "ok" && (kinds.has("srflx") || kinds.has("relay"))) lines.push("👍 Desde aquí todo bien. Si aun así no conectáis, que tu amigo haga también la prueba.");
   lines.push("<small>Para probar tú solo usa <b>dos aparatos</b> (o Safari y Chrome) con apodos distintos: dos pestañas en el mismo móvil no sirven, la de atrás se pausa.</small>");
   show(lines.join("<br>"));
 }
 document.addEventListener("click", (e) => { if (e.target.closest("[data-diagnose]")) diagnose(); });
+
+// Retransmisión propia: formulario para guardar tu servidor TURN.
+function renderTurnForms() {
+  const t = customTurn() || {};
+  for (const form of document.querySelectorAll(".turn-form")) {
+    form.elements.urls.value = t.urls || "";
+    form.elements.username.value = t.username || "";
+    form.elements.credential.value = t.credential || "";
+    form.querySelector(".turn-state").textContent = t.urls ? "✅ Guardada en este móvil" : "";
+  }
+}
+for (const form of document.querySelectorAll(".turn-form")) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const urls = form.elements.urls.value.trim();
+    try {
+      if (urls) localStorage.setItem("gbaweb-turn", JSON.stringify({ urls, username: form.elements.username.value.trim(), credential: form.elements.credential.value.trim() }));
+      else localStorage.removeItem("gbaweb-turn");
+    } catch (err) { /* sin almacenamiento */ }
+    renderTurnForms();
+    friends.restart();
+    toast(urls ? "🛰️ Retransmisión guardada. Toca 🩺 para comprobarla." : "Retransmisión propia quitada");
+  });
+}
+renderTurnForms();
 
 const SIGNALING_ERRORS = ["network", "server-error", "socket-error", "socket-closed", "disconnected"];
 let lastNetError = "";

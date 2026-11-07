@@ -161,8 +161,10 @@ Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan 
   📨 recibida (esperando que acepte) y, al aceptar, ya sois amigos y podéis invitaros.
 - Debajo de tu apodo se ve tu estado: 🟢 en línea, 🟡 conectando, 🔴 sin servidor, 🟠 apodo abierto en otro sitio.
 - Para probar solo hacen falta **dos aparatos** (o dos navegadores distintos) con apodos distintos.
-- Se usa un TURN público gratuito (Open Relay) por si la conexión directa falla con datos móviles;
-  para algo más fiable, pon tu propio servidor TURN en `ICE_SERVERS` (`site/app.js`).
+- Si la fila del amigo dice 🚧 (vuestras redes no se dejan unir), hace falta un servidor de
+  retransmisión (TURN). Hay dos públicos gratuitos de respaldo (Open Relay y FreeSTUN), que pueden
+  no funcionar; lo fiable es **🛰️ Retransmisión propia**: cuenta gratis en expressturn.com o
+  metered.ca y pegar servidor, usuario y contraseña. Basta con que lo ponga uno de los dos.
 
 ## Créditos y licencias
 

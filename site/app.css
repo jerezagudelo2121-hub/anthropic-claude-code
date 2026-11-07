@@ -569,3 +569,10 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
   body.snes .ab { --s: min(6.5vw, 15vh, 58px); top: auto; bottom: 12%; }
   body.snes .screen { max-width: 100vw; }
 }
+
+/* Retransmisión propia (TURN) */
+.turn-box { margin-top: 10px; }
+.turn-box summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.turn-form { display: grid; gap: 8px; margin-top: 8px; }
+.turn-form input { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #ffffff22; background: #0003; color: inherit; font: inherit; }
+.turn-state { color: var(--green); }
