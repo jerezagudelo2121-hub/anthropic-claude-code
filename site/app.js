@@ -1747,7 +1747,7 @@ function randomCode() {
  * Por ella viajan el estado ("jugando a…") y las invitaciones a la sala.
  */
 
-const FRIEND_PROBE_MS = 15000;
+const FRIEND_PROBE_MS = 8000;
 
 function lsGet(key) {
   try { return localStorage.getItem(key) || ""; } catch (e) { return ""; }
@@ -1767,6 +1767,7 @@ const friends = {
   conns: new Map(),     // id de amigo -> conexión abierta
   pending: new Set(),   // ids a los que se está intentando conectar
   status: new Map(),    // id de amigo -> { game, room }
+  reach: new Map(),     // id de amigo -> "offline" (no está en el servidor) | "blocked" (está, pero la red no deja conectar)
   invite: null,         // invitación recibida pendiente
 
   save() {
@@ -1823,7 +1824,10 @@ const friends = {
       if (err.type === "peer-unavailable") {
         // El amigo al que se intentaba llamar no está conectado.
         const m = /u-([a-z0-9]+)/.exec(err.message || "");
-        if (m) this.pending.delete(m[1]);
+        if (m) {
+          this.pending.delete(m[1]);
+          if (this.reach.get(m[1]) !== "offline") { this.reach.set(m[1], "offline"); renderFriends(); }
+        }
         return;
       }
       if (SIGNALING_ERRORS.includes(err.type) || err.type === "server-error") { this.state = "offline"; renderProfile(); }
@@ -1856,14 +1860,17 @@ const friends = {
     for (const f of this.list) {
       if (this.conns.has(f.id) || this.pending.has(f.id)) continue;
       this.pending.add(f.id);
+      if (this.reach.get(f.id) === "offline") this.reach.set(f.id, "offline?");
       const conn = this.peer.connect(this.peerIdFor(f.id), { serialization: "json", metadata: { kind: "friend" } });
       this.attach(conn);
       setTimeout(() => {
         if (!conn.open) {
           this.pending.delete(f.id);
           conn.close();
+          // Si el servidor no dijo que no existe, está conectado pero la red no deja llegar a él.
+          if (this.reach.get(f.id) !== "offline" && !this.conns.has(f.id)) { this.reach.set(f.id, "blocked"); renderFriends(); }
         }
-      }, 10000);
+      }, 7000);
     }
   },
 
@@ -1871,6 +1878,7 @@ const friends = {
     let id = conn.peer.replace(PEER_PREFIX + "u-", "");
     conn.on("open", () => {
       this.pending.delete(id);
+      this.reach.delete(id);
       this.conns.set(id, conn);
       conn.send(this.hello(id));
       render();
@@ -2057,6 +2065,14 @@ function renderProfile() {
   $("#friends-box").hidden = !has;
 }
 
+// Por qué no se conecta un amigo (lo que se sabe del último intento).
+function reachText(f) {
+  const r = friends.reach.get(f.id);
+  if (r === "offline" || r === "offline?") return "⚪ No está conectado ahora (o su apodo no es exactamente «" + f.nick + "»)";
+  if (r === "blocked") return "🚧 Está conectado, pero vuestras redes no dejan uniros. Probad los dos con Wi‑Fi";
+  return "";
+}
+
 function renderFriends() {
   renderProfile();
   for (const list of document.querySelectorAll(".friends-list")) {
@@ -2085,14 +2101,14 @@ function renderFriends() {
           <button class="btn small ghost" data-remove aria-label="Cancelar solicitud">✕</button>`;
         row.querySelector("small").textContent = f.delivered
           ? "Solicitud recibida · esperando a que acepte"
-          : "Solicitud sin enviar · le llegará cuando abráis la web los dos a la vez";
+          : reachText(f) || "Solicitud sin enviar · le llegará cuando abráis la web los dos a la vez";
         row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
       } else {
         row.innerHTML = `<span class="dot ${online ? "on" : ""}"></span>
           <div class="friend-info"><b></b><small></small></div>
           <button class="btn small primary" data-invite ${online ? "" : "disabled"}>Invitar</button>
           <button class="btn small ghost" data-remove aria-label="Quitar">✕</button>`;
-        row.querySelector("small").textContent = !online ? "Desconectado" : st.game ? `Jugando ${st.game}${st.room ? " · en su sala" : ""}` : "En el menú";
+        row.querySelector("small").textContent = !online ? reachText(f) || "Desconectado" : st.game ? `Jugando ${st.game}${st.room ? " · en su sala" : ""}` : "En el menú";
         row.querySelector("[data-invite]").onclick = () => friends.sendInvite(f.id);
         row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
       }
