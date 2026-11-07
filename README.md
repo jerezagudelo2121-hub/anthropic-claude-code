@@ -157,6 +157,8 @@ Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan 
 
 - En **☰ → Multijugador** o en tu lista de amigos, toca **🩺 Probar mi conexión**: dice si llegas al
   servidor de encuentro (PeerJS), si tu red permite conexión directa y si hay retransmisión (TURN).
+- Añadir a un amigo envía una **solicitud**: ⏳ sin enviar (le llega cuando los dos tengáis la web abierta),
+  📨 recibida (esperando que acepte) y, al aceptar, ya sois amigos y podéis invitaros.
 - Debajo de tu apodo se ve tu estado: 🟢 en línea, 🟡 conectando, 🔴 sin servidor, 🟠 apodo abierto en otro sitio.
 - Para probar solo hacen falta **dos aparatos** (o dos navegadores distintos) con apodos distintos.
 - Se usa un TURN público gratuito (Open Relay) por si la conexión directa falla con datos móviles;

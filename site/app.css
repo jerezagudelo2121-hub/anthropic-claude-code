@@ -113,6 +113,8 @@ code { font-size: .92em; }
 .friend-info small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { flex: none; width: 12px; height: 12px; border-radius: 4px; background: #57517e; }
 .dot.on { background: var(--green); box-shadow: 0 0 10px #4ade80aa; }
+.dot.req { width: auto; height: auto; background: none; font-size: 16px; }
+.friend-row.received { box-shadow: inset 0 0 0 2px #f5b94a88; }
 
 /* ---------- Biblioteca ---------- */
 .library { display: flex; flex-direction: column; gap: 12px; }

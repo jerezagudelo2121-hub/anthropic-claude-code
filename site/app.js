@@ -1759,7 +1759,10 @@ function nickId(nick) {
 
 const friends = {
   nick: lsGet("gbaweb-apodo"),
-  list: [].concat(parseJSON(lsGet("gbaweb-amigos") || "[]") || []), // [{ id, nick }]
+  // [{ id, nick, state: "sent" | "received" | "ok", delivered }]: las solicitudes de amistad
+  // se envían en cuanto los dos tenéis la web abierta a la vez.
+  list: [].concat(parseJSON(lsGet("gbaweb-amigos") || "[]") || []).map((f) => ({ ...f, state: f.state || "sent" })),
+  rejected: [].concat(parseJSON(lsGet("gbaweb-rechazados") || "[]") || []),
   peer: null,
   conns: new Map(),     // id de amigo -> conexión abierta
   pending: new Set(),   // ids a los que se está intentando conectar
@@ -1770,6 +1773,7 @@ const friends = {
     try {
       localStorage.setItem("gbaweb-apodo", this.nick);
       localStorage.setItem("gbaweb-amigos", JSON.stringify(this.list));
+      localStorage.setItem("gbaweb-rechazados", JSON.stringify(this.rejected));
     } catch (e) { /* sin almacenamiento */ }
   },
 
@@ -1868,7 +1872,7 @@ const friends = {
     conn.on("open", () => {
       this.pending.delete(id);
       this.conns.set(id, conn);
-      conn.send(this.hello());
+      conn.send(this.hello(id));
       render();
     });
     conn.on("data", (m) => this.onMessage(id, conn, m));
@@ -1884,12 +1888,43 @@ const friends = {
     conn.on("error", gone);
   },
 
-  hello() {
-    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && isRoomMode(net.mode) };
+  hello(id) {
+    const f = id && this.find(id);
+    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && isRoomMode(net.mode), rel: f ? f.state : "none" };
+  },
+
+  find(id) {
+    return this.list.find((f) => f.id === id);
+  },
+
+  setState(id, state) {
+    const f = this.find(id);
+    if (!f || f.state === state) return;
+    f.state = state;
+    this.save();
+    render();
+  },
+
+  // Aceptar o rechazar una solicitud recibida.
+  answerRequest(id, ok) {
+    const f = this.find(id);
+    if (!f) return;
+    const conn = this.conns.get(id);
+    if (ok) {
+      this.setState(id, "ok");
+      if (conn && conn.open) { conn.send({ t: "friend-ok" }); conn.send(this.hello(id)); }
+      toast(`🤝 Ahora ${f.nick} y tú sois amigos`);
+    } else {
+      this.list = this.list.filter((x) => x.id !== id);
+      if (!this.rejected.includes(id)) this.rejected.push(id);
+      this.save();
+      if (conn && conn.open) conn.send({ t: "friend-no" });
+      render();
+    }
   },
 
   broadcastStatus() {
-    for (const conn of this.conns.values()) if (conn.open) conn.send(this.hello());
+    for (const [id, conn] of this.conns) if (conn.open) conn.send(this.hello(id));
     render();
   },
 
@@ -1897,13 +1932,39 @@ const friends = {
     if (!m || typeof m !== "object") return;
     if (m.t === "hi") {
       this.status.set(id, { game: m.game || "", room: !!m.room });
-      // Si alguien te ha añadido, también aparece en tu lista.
-      if (!this.list.some((f) => f.id === id) && m.nick) {
-        this.list.push({ id, nick: String(m.nick).slice(0, 20) });
+      let f = this.find(id);
+      if (!f && m.rel === "sent" && m.nick) {
+        // Te ha llegado una solicitud de amistad.
+        if (this.rejected.includes(id)) { conn.send({ t: "friend-no" }); return; }
+        this.list.push(f = { id, nick: String(m.nick).slice(0, 20), state: "received" });
         this.save();
-        toast(`${m.nick} te ha añadido como amigo`, 4000);
+        toast(`📩 ${m.nick} quiere ser tu amigo. Acéptalo en tu lista de amigos.`, 6000);
+      } else if (f && f.state === "sent") {
+        // Tu solicitud ya le ha llegado; si él también te tenía añadido, ya sois amigos.
+        if (!f.delivered) { f.delivered = true; this.save(); }
+        if (m.rel === "ok" || m.rel === "sent") {
+          this.setState(id, "ok");
+          conn.send({ t: "friend-ok" });
+          toast(`🤝 Ahora ${f.nick} y tú sois amigos`);
+        }
+      } else if (f && f.state === "ok" && m.rel === "sent") {
+        conn.send({ t: "friend-ok" });   // aceptaste cuando él no estaba conectado
       }
       render();
+    } else if (m.t === "friend-ok") {
+      const f = this.find(id);
+      if (f && f.state !== "ok") {
+        this.setState(id, "ok");
+        toast(`🤝 ${f.nick} ha aceptado tu solicitud. ¡Ya sois amigos!`, 5000);
+      }
+    } else if (m.t === "friend-no") {
+      const f = this.find(id);
+      if (f && f.state === "sent") {
+        this.list = this.list.filter((x) => x.id !== id);
+        this.save();
+        render();
+        toast(`${f.nick} no ha aceptado tu solicitud`, 4000);
+      }
     } else if (m.t === "invite") {
       this.showInvite(id, m);
     } else if (m.t === "invite-no") {
@@ -1923,15 +1984,17 @@ const friends = {
     if (id.length < 3) return toast("Escribe el apodo de tu amigo (mínimo 3 letras o números)");
     if (id === nickId(this.nick)) return toast("Ese es tu propio apodo 😄");
     if (this.list.some((f) => f.id === id)) return toast("Ya lo tienes en tu lista");
-    this.list.push({ id, nick: nick.trim().slice(0, 20) });
+    this.rejected = this.rejected.filter((x) => x !== id);
+    this.list.push({ id, nick: nick.trim().slice(0, 20), state: "sent" });
     this.save();
     render();
     this.probe();
-    toast(`✅ ${nick.trim()} añadido. Saldrá en verde cuando tenga la web abierta con ese apodo (los dos a la vez).`, 5000);
+    toast(`📨 Solicitud para ${nick.trim()} preparada. Le llegará cuando los dos tengáis la web abierta a la vez.`, 5000);
   },
 
   remove(id) {
-    if (!confirm(`¿Quitar a ${this.nickOf(id)} de tus amigos?`)) return;
+    const f = this.find(id);
+    if (!confirm(f && f.state === "sent" ? `¿Cancelar la solicitud a ${f.nick}?` : `¿Quitar a ${this.nickOf(id)} de tus amigos?`)) return;
     this.list = this.list.filter((f) => f.id !== id);
     this.save();
     const conn = this.conns.get(id);
@@ -1943,6 +2006,7 @@ const friends = {
   sendInvite(id) {
     const conn = this.conns.get(id);
     if (!conn || !conn.open) return toast(`${this.nickOf(id)} no está conectado ahora`);
+    if ((this.find(id) || {}).state !== "ok") return toast(`Primero ${this.nickOf(id)} tiene que aceptar tu solicitud de amistad`);
     if (!engine) return toast("Abre primero tu juego para poder invitar");
     if (net.role && !(net.role === "host" && isRoomMode(net.mode))) {
       return toast("Ya estás en una sala. Termina el multijugador para crear la tuya.", 4000);
@@ -1998,23 +2062,41 @@ function renderFriends() {
   for (const list of document.querySelectorAll(".friends-list")) {
     list.innerHTML = "";
     if (!friends.list.length) {
-      list.innerHTML = '<p class="hint">Añade a tu amigo con su apodo: a él le aparecerás en su lista automáticamente.</p>';
+      list.innerHTML = '<p class="hint">Añade a tu amigo con su apodo: le llegará una solicitud y, cuando la acepte, podréis invitaros a jugar.</p>';
       continue;
     }
-    const sorted = [...friends.list].sort((a, b) => friends.conns.has(b.id) - friends.conns.has(a.id));
+    const rank = (f) => (f.state === "received" ? 3 : f.state === "ok" ? 1 + friends.conns.has(f.id) : 0);
+    const sorted = [...friends.list].sort((a, b) => rank(b) - rank(a));
     for (const f of sorted) {
       const online = friends.conns.has(f.id);
       const st = friends.status.get(f.id) || {};
       const row = document.createElement("div");
-      row.className = "friend-row";
-      row.innerHTML = `<span class="dot ${online ? "on" : ""}"></span>
-        <div class="friend-info"><b></b><small></small></div>
-        <button class="btn small primary" data-invite ${online ? "" : "disabled"}>Invitar</button>
-        <button class="btn small ghost" data-remove aria-label="Quitar">✕</button>`;
+      row.className = "friend-row " + f.state;
+      if (f.state === "received") {
+        row.innerHTML = `<span class="dot req">📩</span>
+          <div class="friend-info"><b></b><small>Quiere ser tu amigo</small></div>
+          <button class="btn small primary" data-accept>Aceptar</button>
+          <button class="btn small ghost" data-reject aria-label="Rechazar">✕</button>`;
+        row.querySelector("[data-accept]").onclick = () => friends.answerRequest(f.id, true);
+        row.querySelector("[data-reject]").onclick = () => friends.answerRequest(f.id, false);
+      } else if (f.state === "sent") {
+        row.innerHTML = `<span class="dot req">${f.delivered ? "📨" : "⏳"}</span>
+          <div class="friend-info"><b></b><small></small></div>
+          <button class="btn small ghost" data-remove aria-label="Cancelar solicitud">✕</button>`;
+        row.querySelector("small").textContent = f.delivered
+          ? "Solicitud recibida · esperando a que acepte"
+          : "Solicitud sin enviar · le llegará cuando abráis la web los dos a la vez";
+        row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
+      } else {
+        row.innerHTML = `<span class="dot ${online ? "on" : ""}"></span>
+          <div class="friend-info"><b></b><small></small></div>
+          <button class="btn small primary" data-invite ${online ? "" : "disabled"}>Invitar</button>
+          <button class="btn small ghost" data-remove aria-label="Quitar">✕</button>`;
+        row.querySelector("small").textContent = !online ? "Desconectado" : st.game ? `Jugando ${st.game}${st.room ? " · en su sala" : ""}` : "En el menú";
+        row.querySelector("[data-invite]").onclick = () => friends.sendInvite(f.id);
+        row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
+      }
       row.querySelector("b").textContent = f.nick;
-      row.querySelector("small").textContent = !online ? "Desconectado" : st.game ? `Jugando ${st.game}${st.room ? " · en su sala" : ""}` : "En el menú";
-      row.querySelector("[data-invite]").onclick = () => friends.sendInvite(f.id);
-      row.querySelector("[data-remove]").onclick = () => friends.remove(f.id);
       list.appendChild(row);
     }
   }
