@@ -39,7 +39,7 @@
         </div>
       </form>
       <div id="nick-view" class="nick-view" hidden>
-        <span>👤 Tu apodo: <b id="my-nick"></b></span>
+        <span>👤 Tu apodo: <b id="my-nick"></b><br><small id="my-status"></small></span>
         <button id="nick-edit" class="btn small ghost" type="button">✏️</button>
       </div>
       <div id="friends-box" class="friends-box" hidden>
@@ -49,6 +49,8 @@
           <input type="text" maxlength="20" autocomplete="off" placeholder="Apodo de tu amigo" aria-label="Apodo de tu amigo">
           <button class="btn" type="submit">Añadir amigo</button>
         </form>
+        <button class="btn small ghost" type="button" data-diagnose>🩺 Probar mi conexión</button>
+        <p class="hint diag-out" hidden></p>
       </div>
     </section>
 
@@ -193,6 +195,8 @@
           <label class="toggle" id="guest-control-row"><input type="checkbox" id="guest-control" checked> El amigo puede usar los controles</label>
           <button class="btn danger" data-action="stop-net">Terminar multijugador</button>
         </div>
+        <button class="btn small ghost" type="button" data-diagnose>🩺 Probar mi conexión</button>
+        <p class="hint diag-out" hidden></p>
       </section>
 
       <section class="menu-card">

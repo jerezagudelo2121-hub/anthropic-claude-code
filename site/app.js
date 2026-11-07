@@ -9,8 +9,10 @@ const PEER_PREFIX = "gbaweb-v2-";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  // Si vuestra red bloquea conexiones directas, añade aquí un servidor TURN:
-  // { urls: "turn:tu-servidor:3478", username: "usuario", credential: "clave" },
+  // Retransmisión (TURN) gratuita y pública: se usa solo si no se puede conectar directo,
+  // algo habitual con datos móviles. Puede cambiar o dejar de funcionar; para algo fiable,
+  // pon aquí tu propio servidor TURN (por ejemplo, de una cuenta gratuita de ExpressTURN o Metered).
+  { urls: ["turn:openrelay.metered.ca:80", "turn:openrelay.metered.ca:443", "turn:openrelay.metered.ca:443?transport=tcp"], username: "openrelayproject", credential: "openrelayproject" },
 ];
 const SLOTS = 3;
 const COVER_EVERY_MS = 30000;
@@ -1620,6 +1622,53 @@ const net = {
   },
 };
 
+/* ---------- Probar la conexión ----------
+ * Comprueba las tres cosas que hacen falta para jugar online: llegar al servidor de encuentro
+ * (PeerJS), poder conectar directo (STUN) y tener retransmisión por si no (TURN). */
+async function diagnose() {
+  const outs = document.querySelectorAll(".diag-out");
+  const show = (html) => outs.forEach((o) => { o.hidden = false; o.innerHTML = html; });
+  show("⏳ Probando tu conexión… (unos segundos)");
+  const lines = [];
+  // 1) Servidor de encuentro.
+  const server = await new Promise((resolve) => {
+    let peer;
+    try { peer = net.newPeer(); } catch (e) { return resolve("error: " + e.message); }
+    const done = (v) => { clearTimeout(t); try { peer.destroy(); } catch (e) {} resolve(v); };
+    const t = setTimeout(() => done("timeout"), 12000);
+    peer.on("open", () => done("ok"));
+    peer.on("error", (err) => done(err.type || "error"));
+  });
+  lines.push(server === "ok"
+    ? "✅ Servidor de encuentro: funciona."
+    : "❌ Servidor de encuentro: no responde (" + server + "). Puede estar caído o bloqueado en esta red. Prueba con otra red (Wi‑Fi ↔ datos) o más tarde.");
+  // 2) Tipos de conexión posibles.
+  const kinds = new Set();
+  try {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    pc.createDataChannel("prueba");
+    pc.onicecandidate = (e) => { if (e.candidate && e.candidate.candidate) { const m = / typ (\w+)/.exec(e.candidate.candidate); if (m) kinds.add(m[1]); } };
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((resolve) => {
+      const t = setTimeout(resolve, 9000);
+      pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === "complete") { clearTimeout(t); resolve(); } };
+    });
+    pc.close();
+  } catch (e) {
+    lines.push("❌ Tu navegador no permite conexiones WebRTC: " + e.message);
+  }
+  lines.push(kinds.has("srflx")
+    ? "✅ Conexión directa: tu red la permite."
+    : "⚠️ Conexión directa: tu red no la deja (pasa con algunos datos móviles o redes de empresa/colegio).");
+  lines.push(kinds.has("relay")
+    ? "✅ Retransmisión: disponible (se usa si no se puede directo)."
+    : "⚠️ Retransmisión: no disponible ahora. Si la conexión directa falla, conectad los dos por Wi‑Fi.");
+  if (server === "ok" && (kinds.has("srflx") || kinds.has("relay"))) lines.push("👍 Desde aquí todo bien. Si aun así no conectáis, que tu amigo haga también la prueba.");
+  lines.push("<small>Para probar tú solo usa <b>dos aparatos</b> (o Safari y Chrome) con apodos distintos: dos pestañas en el mismo móvil no sirven, la de atrás se pausa.</small>");
+  show(lines.join("<br>"));
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-diagnose]")) diagnose(); });
+
 const SIGNALING_ERRORS = ["network", "server-error", "socket-error", "socket-closed", "disconnected"];
 let lastNetError = "";
 
@@ -1732,9 +1781,13 @@ const friends = {
     if (!this.nick || this.peer || !window.Peer) return;
     let peer;
     try { peer = this.peer = net.newPeer(this.peerIdFor(nickId(this.nick))); } catch (e) { return; }
+    this.state = "connecting";
+    renderProfile();
     peer.on("open", () => {
       this.online = true;
+      this.state = "online";
       this.justSet = false;
+      this.retries = 0;
       render();
       this.probe();
     });
@@ -1744,14 +1797,23 @@ const friends = {
         this.peer = null;
         peer.destroy();
         this.online = false;
-        render();
-        toast(`El apodo «${this.nick}» ya lo está usando otra persona (o tienes la web abierta en otra pestaña). Elige otro.`, 6000);
         if (this.justSet) {
           // Apodo recién elegido y ocupado: se vuelve a pedir.
+          toast(`El apodo «${this.nick}» ya lo está usando otra persona (o tienes la web abierta en otra pestaña). Elige otro.`, 6000);
           this.nick = "";
           this.save();
+          this.state = "";
           render();
+          return;
         }
+        // Tu apodo de siempre: casi siempre es tu propia sesión anterior, que el servidor
+        // aún no ha soltado (pasa al recargar o al volver a la app en iPhone). Se reintenta solo.
+        this.retries = (this.retries || 0) + 1;
+        this.state = this.retries > 12 ? "taken" : "connecting";
+        render();
+        if (this.retries === 13) toast(`Tu apodo «${this.nick}» sigue ocupado. ¿Tienes la web abierta en otro sitio? Ciérrala o cambia de apodo.`, 7000);
+        clearTimeout(this.retryTimer);
+        this.retryTimer = setTimeout(() => this.start(), this.retries > 12 ? 30000 : 5000);
         return;
       }
       if (err.type === "peer-unavailable") {
@@ -1760,6 +1822,7 @@ const friends = {
         if (m) this.pending.delete(m[1]);
         return;
       }
+      if (SIGNALING_ERRORS.includes(err.type) || err.type === "server-error") { this.state = "offline"; renderProfile(); }
       if (SIGNALING_ERRORS.includes(err.type)) setTimeout(() => {
         if (this.peer === peer && !peer.destroyed && peer.disconnected) try { peer.reconnect(); } catch (e) { /* reintento luego */ }
       }, 3000);
@@ -1772,6 +1835,8 @@ const friends = {
   },
 
   restart() {
+    this.retries = 0;
+    clearTimeout(this.retryTimer);
     for (const conn of this.conns.values()) conn.close();
     this.conns.clear();
     this.pending.clear();
@@ -1862,7 +1927,7 @@ const friends = {
     this.save();
     render();
     this.probe();
-    toast(`${nick.trim()} añadido. Aparecerá en verde cuando tenga la web abierta.`, 4000);
+    toast(`✅ ${nick.trim()} añadido. Saldrá en verde cuando tenga la web abierta con ese apodo (los dos a la vez).`, 5000);
   },
 
   remove(id) {
@@ -1923,6 +1988,8 @@ function renderProfile() {
   $("#nick-form").hidden = has;
   $("#nick-view").hidden = !has;
   $("#my-nick").textContent = friends.nick;
+  const st = { online: ["🟢", "En línea: tus amigos te ven"], connecting: ["🟡", "Conectando…"], offline: ["🔴", "Sin conexión con el servidor. Toca 🩺 para ver qué pasa"], taken: ["🟠", "Tu apodo está abierto en otro sitio"] }[friends.state] || ["⚪", ""];
+  $("#my-status").textContent = st[0] + " " + st[1];
   $("#friends-box").hidden = !has;
 }
 

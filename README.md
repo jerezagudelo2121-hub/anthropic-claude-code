@@ -153,6 +153,15 @@ Para probarlo en local: `cd site && python3 -m http.server 8000` y abre http://l
 
 Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan `clang`, `wasm-ld`, `git` y `python3`).
 
+## Si el multijugador no conecta
+
+- En **☰ → Multijugador** o en tu lista de amigos, toca **🩺 Probar mi conexión**: dice si llegas al
+  servidor de encuentro (PeerJS), si tu red permite conexión directa y si hay retransmisión (TURN).
+- Debajo de tu apodo se ve tu estado: 🟢 en línea, 🟡 conectando, 🔴 sin servidor, 🟠 apodo abierto en otro sitio.
+- Para probar solo hacen falta **dos aparatos** (o dos navegadores distintos) con apodos distintos.
+- Se usa un TURN público gratuito (Open Relay) por si la conexión directa falla con datos móviles;
+  para algo más fiable, pon tu propio servidor TURN en `ICE_SERVERS` (`site/app.js`).
+
 ## Créditos y licencias
 
 - [gpSP](https://github.com/libretro/gpsp) (GPL-2.0), commit `5819380`, compilado en
