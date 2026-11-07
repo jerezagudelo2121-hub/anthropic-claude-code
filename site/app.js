@@ -1370,6 +1370,7 @@ const net = {
     });
     peer.on("disconnected", () => reconnectLater(peer));
     peer.on("connection", (conn) => this.acceptGuest(conn));
+    enableRelay(peer, (conn) => this.acceptGuest(conn));
   },
 
   acceptGuest(conn) {
@@ -1470,15 +1471,10 @@ const net = {
       return toast("No se pudo iniciar el multijugador: " + e.message, 4000);
     }
     toast("Conectando…", 4000);
-    peer.on("open", () => {
-      const conn = this.conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "raw" });
+    let opened = false;
+    const wire = (conn) => {
+      this.conn = conn;
       conn.on("data", (msg) => this.onHostData(msg));
-      setTimeout(() => {
-        if (this.conn === conn && !conn.open) {
-          showNetError("No se pudo conectar directamente con tu amigo. Suele pasar con algunos datos móviles: probad los dos con Wi‑Fi, y que tu amigo tenga la web abierta en pantalla.");
-          conn.close();
-        }
-      }, 20000);
       const gone = () => {
         if (this.conn !== conn) return;
         if (this.mode === "link" && this.role === "guest") engine.netStop();
@@ -1493,8 +1489,25 @@ const net = {
         this.renderSession();
         friends.broadcastStatus();
       };
-      conn.on("open", () => heartbeat(conn, gone));
+      conn.on("open", () => { opened = true; heartbeat(conn, gone); });
       conn.on("close", gone);
+    };
+    peer.on("open", () => {
+      if (opened || this.conn) return;   // PeerJS repite "open" al reconectar
+      enableRelay(peer, () => {});
+      const direct = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: "raw" });
+      wire(direct);
+      // Si en 8 s no hay conexión directa, se pasa al plan B: por el servidor.
+      setTimeout(() => {
+        if (opened || this.conn !== direct || this.peer !== peer) return;
+        toast("Conexión directa bloqueada por vuestras redes: conectando por el servidor…", 4000);
+        const rc = relayConnect(peer, PEER_PREFIX + code, null);
+        wire(rc);
+        direct.close();
+        setTimeout(() => {
+          if (!opened && this.conn === rc) showNetError("No se pudo conectar con tu amigo. Que tenga la web abierta en pantalla y probad otra vez.");
+        }, 13000);
+      }, 8000);
     });
     peer.on("call", (call) => {
       this.call = call;
@@ -1633,6 +1646,110 @@ const net = {
     }
   },
 };
+
+/* ---------- Plan B: conexión a través del servidor de encuentro ----------
+ * Si vuestras redes no se dejan unir directamente (pasa entre países o con algunos
+ * proveedores), los mensajes viajan por el propio servidor de PeerJS, que reenvía los avisos
+ * de conexión entre dos usuarios. Imita lo que la app usa de una conexión de PeerJS
+ * (open, send, close y los eventos open/data/close), así que el resto del código no cambia.
+ * Es más lento que la conexión directa, pero no necesita configurar nada. */
+const RELAY_TYPE = "CANDIDATE";       // tipo de mensaje que el servidor reenvía tal cual
+const relays = new Map();             // "miId|suId|cid" -> RelayConn
+
+function toB64(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromB64(b) {
+  const s = atob(b), u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  return u8;
+}
+
+class RelayConn {
+  constructor(peer, remoteId, cid, metadata) {
+    this._peer = peer;
+    this.peer = remoteId;
+    this.connectionId = cid;
+    this.metadata = metadata;
+    this.open = false;
+    this.relay = true;
+    this._h = {};
+    this.key = peer.id + "|" + remoteId + "|" + cid;
+    relays.set(this.key, this);
+  }
+  on(ev, fn) { (this._h[ev] = this._h[ev] || []).push(fn); return this; }
+  _emit(ev, ...args) { for (const fn of this._h[ev] || []) { try { fn(...args); } catch (e) { console.error(e); } } }
+  _raw(k, extra) {
+    const sock = this._peer.socket;
+    if (sock && !this._peer.destroyed) sock.send({ type: RELAY_TYPE, dst: this.peer, payload: { gbaRelay: 1, k, cid: this.connectionId, ...extra } });
+  }
+  send(data) {
+    if (!this.open) return;
+    if (typeof data === "string") this._raw("d", { s: data });
+    else if (data instanceof ArrayBuffer) this._raw("d", { b: toB64(new Uint8Array(data)) });
+    else if (ArrayBuffer.isView(data)) this._raw("d", { b: toB64(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)) });
+    else this._raw("d", { o: data });
+  }
+  close() {
+    if (this._closed) return;
+    this._closed = true;
+    this.open = false;
+    this._raw("c");
+    relays.delete(this.key);
+    this._emit("close");
+  }
+}
+
+// Escucha las conexiones por el servidor que llegan a este peer.
+function enableRelay(peer, onConnection) {
+  const sock = peer.socket;
+  if (!sock || sock._gbaRelay) return;
+  sock._gbaRelay = true;
+  sock.on("message", (m) => {
+    const p = m && m.payload;
+    if (!p || !p.gbaRelay || m.type !== RELAY_TYPE || !m.src) return;
+    const c = relays.get(peer.id + "|" + m.src + "|" + p.cid);
+    if (p.k === "o") {
+      if (c) return;
+      const conn = new RelayConn(peer, m.src, p.cid, p.meta);
+      onConnection(conn);
+      conn.open = true;
+      conn._raw("a");
+      setTimeout(() => conn._emit("open"));
+    } else if (!c) {
+      // Mensaje de una conexión que ya no existe aquí (p. ej. recargaste la página): se avisa
+      // al otro para que la cierre y vuelva a conectar.
+      if (p.k === "d" || p.k === "a") sock.send({ type: RELAY_TYPE, dst: m.src, payload: { gbaRelay: 1, k: "c", cid: p.cid } });
+      return;
+    } else if (p.k === "a") {
+      if (!c.open && !c._closed) { c.open = true; c._emit("open"); }
+    } else if (p.k === "d") {
+      c._last = Date.now();
+      if (c.open) c._emit("data", p.s !== undefined ? p.s : p.b !== undefined ? fromB64(p.b).buffer : p.o);
+    } else if (p.k === "c") {
+      c._closed = true;
+      c.open = false;
+      relays.delete(c.key);
+      c._emit("close");
+    }
+  });
+}
+
+// El servidor avisa de que alguien ya no está: se cierran las conexiones por el servidor con él.
+function closeRelaysTo(peer, remoteId) {
+  for (const c of [...relays.values()]) if (c._peer === peer && c.peer === remoteId) { c._closed = true; c.open = false; relays.delete(c.key); c._emit("close"); }
+}
+
+// Abre una conexión por el servidor (si en 12 s no contesta, se cierra).
+function relayConnect(peer, remoteId, metadata) {
+  const conn = new RelayConn(peer, remoteId, "r" + Math.random().toString(36).slice(2, 10), metadata);
+  conn._mine = true;
+  conn._raw("o", { meta: metadata });
+  setTimeout(() => { if (!conn.open) conn.close(); }, 12000);
+  return conn;
+}
 
 /* ---------- Probar la conexión ----------
  * Comprueba las tres cosas que hacen falta para jugar online: llegar al servidor de encuentro
@@ -1804,6 +1921,7 @@ const friends = {
   conns: new Map(),     // id de amigo -> conexión abierta
   pending: new Set(),   // ids a los que se está intentando conectar
   status: new Map(),    // id de amigo -> { game, room }
+  viaRelay: new Set(),  // amigos con los que se conecta por el servidor (plan B)
   reach: new Map(),     // id de amigo -> "offline" (no está en el servidor) | "blocked" (está, pero la red no deja conectar)
   invite: null,         // invitación recibida pendiente
 
@@ -1834,6 +1952,7 @@ const friends = {
       this.probe();
     });
     peer.on("connection", (conn) => this.attach(conn));
+    enableRelay(peer, (conn) => this.attach(conn));
     peer.on("error", (err) => {
       if (err.type === "unavailable-id") {
         this.peer = null;
@@ -1861,6 +1980,7 @@ const friends = {
       if (err.type === "peer-unavailable") {
         // El amigo al que se intentaba llamar no está conectado.
         const m = /u-([a-z0-9]+)/.exec(err.message || "");
+        if (m) closeRelaysTo(peer, this.peerIdFor(m[1]));
         if (m) {
           this.pending.delete(m[1]);
           if (this.reach.get(m[1]) !== "offline") { this.reach.set(m[1], "offline"); renderFriends(); }
@@ -1894,18 +2014,43 @@ const friends = {
   // Intenta conectar con los amigos que no están conectados.
   probe() {
     if (!this.peer || this.peer.disconnected || document.visibilityState === "hidden") return;
+    // Las conexiones por el servidor no notan solas si el otro se fue: latido cada vuelta.
+    for (const conn of this.conns.values()) {
+      if (!conn.relay) continue;
+      if (Date.now() - (conn._last || conn._openedAt || Date.now()) > 30000) conn.close();
+      else conn.send({ t: "ping" });
+    }
     for (const f of this.list) {
       if (this.conns.has(f.id) || this.pending.has(f.id)) continue;
       this.pending.add(f.id);
       if (this.reach.get(f.id) === "offline") this.reach.set(f.id, "offline?");
+      if (this.viaRelay.has(f.id)) {
+        // Con este amigo la conexión directa no funciona: directamente por el servidor.
+        const rc = relayConnect(this.peer, this.peerIdFor(f.id), { kind: "friend" });
+        this.attach(rc);
+        setTimeout(() => { if (!rc.open) this.pending.delete(f.id); }, 12500);
+        continue;
+      }
       const conn = this.peer.connect(this.peerIdFor(f.id), { serialization: "json", metadata: { kind: "friend" } });
+      conn._mine = true;
       this.attach(conn);
       setTimeout(() => {
         if (!conn.open) {
           this.pending.delete(f.id);
           conn.close();
-          // Si el servidor no dijo que no existe, está conectado pero la red no deja llegar a él.
-          if (this.reach.get(f.id) !== "offline" && !this.conns.has(f.id)) { this.reach.set(f.id, "blocked"); renderFriends(); }
+          // Si el servidor no dijo que no existe, está conectado pero la red no deja llegar a él:
+          // se prueba por el servidor (plan B).
+          if (this.reach.get(f.id) !== "offline" && !this.conns.has(f.id)) {
+            this.reach.set(f.id, "blocked");
+            this.viaRelay.add(f.id);
+            renderFriends();
+            if (this.peer && !this.peer.disconnected) {
+              this.pending.add(f.id);
+              const rc = relayConnect(this.peer, this.peerIdFor(f.id), { kind: "friend" });
+              this.attach(rc);
+              setTimeout(() => { if (!rc.open) this.pending.delete(f.id); }, 12500);
+            }
+          }
         }
       }, 7000);
     }
@@ -1916,6 +2061,16 @@ const friends = {
     conn.on("open", () => {
       this.pending.delete(id);
       this.reach.delete(id);
+      conn._openedAt = conn._last = Date.now();
+      const old = this.conns.get(id);
+      if (old && old !== conn && old.open) {
+        // Dos conexiones con el mismo amigo (os buscasteis a la vez): los dos se quedan con
+        // la que abrió el de apodo "menor", para no cerrar cada uno una distinta.
+        const keepMine = nickId(this.nick) < id;
+        if (!!conn._mine !== keepMine) { conn.close(); return; }
+        this.conns.set(id, conn);
+        old.close();
+      }
       this.conns.set(id, conn);
       conn.send(this.hello(id));
       render();
@@ -2106,7 +2261,7 @@ function renderProfile() {
 function reachText(f) {
   const r = friends.reach.get(f.id);
   if (r === "offline" || r === "offline?") return "⚪ No está conectado ahora (o su apodo no es exactamente «" + f.nick + "»)";
-  if (r === "blocked") return "🚧 Está conectado, pero vuestras redes no dejan uniros. Probad los dos con Wi‑Fi";
+  if (r === "blocked") return "🔄 Vuestras redes no se dejan unir directo: conectando por el servidor…";
   return "";
 }
 
