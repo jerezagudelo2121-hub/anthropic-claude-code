@@ -161,7 +161,10 @@ Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan 
   📨 recibida (esperando que acepte) y, al aceptar, ya sois amigos y podéis invitaros.
 - Debajo de tu apodo se ve tu estado: 🟢 en línea, 🟡 conectando, 🔴 sin servidor, 🟠 apodo abierto en otro sitio.
 - Para probar solo hacen falta **dos aparatos** (o dos navegadores distintos) con apodos distintos.
-- Si la fila del amigo dice 🚧 (vuestras redes no se dejan unir), hace falta un servidor de
+- **Plan B automático**: si la conexión directa no funciona en 8 s, los mensajes (amigos, invitaciones,
+  cable link y mandos de SNES) viajan por el propio servidor de encuentro de PeerJS. Más lento, pero sin
+  configurar nada.
+- Si la fila del amigo dice 🔄 (vuestras redes no se dejan unir), hace falta un servidor de
   retransmisión (TURN). Hay dos públicos gratuitos de respaldo (Open Relay y FreeSTUN), que pueden
   no funcionar; lo fiable es **🛰️ Retransmisión propia**: cuenta gratis en expressturn.com o
   metered.ca y pegar servidor, usuario y contraseña. Basta con que lo ponga uno de los dos.
