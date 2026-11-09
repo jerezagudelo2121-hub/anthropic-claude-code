@@ -678,3 +678,29 @@ body.stretch #game, body.stretch #remote-video { left: -6%; right: auto; width: 
   body.stretch.snes .screen { width: auto; height: 100%; max-width: 100vw; aspect-ratio: 4 / 3; }
   body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
 }
+
+/* ---------- Horizontal: los botones nunca tapan el juego ----------
+ * Cada lado tiene una columna para el mando (--side) y la pantalla usa solo el hueco del centro,
+ * en su proporción. Va al final y con #id para mandar sobre las opciones de pantalla. */
+@media (orientation: landscape) and (max-height: 600px) {
+  #console { --side: clamp(140px, 21vw, 210px); }
+  #console #screen {
+    height: auto; max-width: none; aspect-ratio: 3 / 2;
+    width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 3 / 2));
+  }
+  body.snes #console #screen { aspect-ratio: 4 / 3; width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 4 / 3)); }
+  body.pad-hidden #console #screen { width: min(100vw, calc(100dvh * 3 / 2)); }
+  body.pad-hidden.snes #console #screen { width: min(100vw, calc(100dvh * 4 / 3)); }
+  body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
+  /* Mando dentro de las columnas laterales, sin transparencia */
+  .pad .key, .pad .face, .dpad { opacity: 1; }
+  .shoulder { width: calc(var(--side) - 20px); max-width: none; top: 52px; height: 38px; }
+  .shoulder.l { left: calc(10px + var(--safe-l)); }
+  .shoulder.r { right: calc(10px + var(--safe-r)); }
+  .dpad { --s: min(calc(var(--side) - 26px), 42vh); left: calc(13px + var(--safe-l)); bottom: 15%; }
+  .ab { --s: min(calc((var(--side) - 24px) / 2.3), 19vh); right: calc(12px + var(--safe-r)); bottom: 18%; }
+  body.snes .ab { --s: min(calc((var(--side) - 24px) / 2.7), 15vh); bottom: 15%; }
+  .meta { right: calc(10px + var(--safe-r)); gap: 6px; }
+  .meta .pill { width: calc((var(--side) - 26px) / 2); }
+  .turbo { left: calc(10px + var(--safe-l)); }
+}
