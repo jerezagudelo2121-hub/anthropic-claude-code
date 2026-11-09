@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.09b";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.10";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -151,8 +151,42 @@ function formatSize(bytes) {
 
 async function loadLibrary() {
   try { library = await db.all("roms"); } catch (e) { library = []; }
+  migrateRoms();
   library.sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) || romTitle(a).localeCompare(romTitle(b)));
   renderLibrary();
+}
+
+// ROMs guardadas por versiones anteriores como archivo: se copian a bytes mientras aún se puedan
+// leer; si iOS ya las borró, se marcan para volver a añadirlas (la partida no se pierde).
+let migrating = false;
+async function migrateRoms() {
+  if (migrating) return;
+  migrating = true;
+  let changed = false;
+  for (const rom of library) {
+    if (!(rom.data instanceof Blob) || rom.missing) continue;
+    try {
+      const data = new Uint8Array(await rom.data.arrayBuffer());
+      await db.put("roms", { ...rom, data, size: data.length });
+      rom.data = data;
+    } catch (e) {
+      console.warn("ROM perdida:", rom.name, e);
+      rom.missing = true;
+      await updateRom(rom.name, { missing: true }).catch(() => {});
+    }
+    changed = true;
+  }
+  migrating = false;
+  if (changed) renderLibrary();
+}
+
+// Volver a elegir el archivo de una ROM perdida: se guarda con el mismo nombre, así sigue
+// con sus partidas.
+let relinkName = null;
+function relinkRom(rom) {
+  relinkName = rom.name;
+  toast(`Elige otra vez el archivo de «${romTitle(rom)}». Tus partidas siguen guardadas.`, 6000);
+  $("#rom-input").click();
 }
 
 function renderLibrary() {
@@ -202,7 +236,11 @@ function renderLibrary() {
       tag.textContent = "SNES";
       card.appendChild(tag);
     }
-    card.onclick = () => playRom(rom);
+    card.onclick = () => (rom.missing ? relinkRom(rom) : playRom(rom));
+    if (rom.missing) {
+      card.classList.add("missing");
+      info.lastChild.textContent = "⚠️ Toca para volver a elegir la ROM (tu partida sigue guardada)";
+    }
     grid.appendChild(card);
   }
   updateStorageInfo();
@@ -219,12 +257,17 @@ async function updateStorageInfo() {
   }
 }
 
-async function addToLibrary(files) {
+// Se guarda una copia de los bytes de la ROM (no el archivo elegido): en iPhone, guardar el
+// archivo tal cual deja solo una referencia que iOS puede borrar con el tiempo
+// ("The object can not be found here"). targetName vuelve a enlazar una ROM perdida.
+async function addToLibrary(files, targetName) {
   let added = 0;
   for (const file of files) {
     try {
-      const old = library.find((r) => r.name === file.name);
-      await db.put("roms", { ...old, name: file.name, data: file, size: file.size, added: (old && old.added) || Date.now() });
+      const name = targetName || file.name;
+      const old = library.find((r) => r.name === name);
+      const data = new Uint8Array(await file.arrayBuffer());
+      await db.put("roms", { ...old, name, data, size: data.length, missing: false, added: (old && old.added) || Date.now() });
       added++;
     } catch (e) {
       console.warn("No se pudo guardar", file.name, e);
@@ -382,7 +425,7 @@ $("#ss-new").onclick = async () => {
 function openGameSheet(rom) {
   sheetRom = rom;
   $("#gs-title").textContent = romTitle(rom);
-  const parts = [formatSize(rom.size || rom.data.size)];
+  const parts = [formatSize(rom.size || (rom.data && (rom.data.size || rom.data.length)) || 0)];
   parts.push(rom.lastPlayed ? "jugado " + timeAgo(rom.lastPlayed) : "sin jugar");
   $("#gs-info").textContent = parts.join(" · ");
   $("[data-gs=cover]").hidden = !rom.cover;
@@ -441,6 +484,15 @@ $("#rom-input").addEventListener("change", async (e) => {
   const files = [...e.target.files];
   e.target.value = "";
   if (!files.length) return;
+  if (relinkName && files.length === 1) {
+    const name = relinkName;
+    relinkName = null;
+    if (!(await addToLibrary(files, name))) return;
+    toast("¡ROM recuperada! Sigues con tu partida.", 4000);
+    const rom = library.find((r) => r.name === name);
+    return rom && playRom(rom);
+  }
+  relinkName = null;
   const added = await addToLibrary(files);
   // Si te han invitado a jugar juntos (o solo eliges uno), el juego arranca directamente.
   if (files.length === 1 && added) {
@@ -530,6 +582,16 @@ async function startGame(file, record, pid) {
     friends.broadcastStatus();
   } catch (err) {
     console.error(err);
+    if (err && (err.name === "NotFoundError" || /can ?not be found|could not be found/i.test(err.message || "")) && record) {
+      // iOS borró la copia del archivo: se marca para volver a elegirlo. Las partidas están aparte.
+      await updateRom(record.name, { missing: true }).catch(() => {});
+      screenMsg("");
+      const el = $("#screen-msg");
+      el.hidden = false;
+      el.innerHTML = '<div><p>El iPhone ha borrado la copia de este juego, pero <b>tu partida sigue guardada</b>.</p><button class="btn primary" type="button">📂 Volver a elegir la ROM</button><p class="hint">Elige el mismo juego (el mismo archivo .gba) y seguirás donde ibas.</p></div>';
+      el.querySelector("button").onclick = () => relinkRom(record);
+      return;
+    }
     screenMsg("No se pudo cargar: " + err.message);
   }
 }
