@@ -666,24 +666,34 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 .game-card.missing small { color: #f5b94a; }
 #screen-msg .btn { margin: 10px 0; }
 
-/* ---------- Juego ampliado (sin deformar) ----------
- * En vertical el juego ya ocupa todo el ancho: para verlo más grande sin estirarlo se amplía
- * un 12 % y se recorta lo que sobra por los lados (unos pocos píxeles). En horizontal no hace
- * falta: la imagen ya ocupa toda la altura. */
-body.stretch .screen { aspect-ratio: auto; width: 100%; max-width: none; height: calc(100vw / 1.5 * 1.12); }
-body.stretch.snes .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 3 / 4 * 1.12); }
-body.stretch #game, body.stretch #remote-video { left: -6%; right: auto; width: 112%; }
+/* ---------- Juego ampliado en vertical (sin deformar) ----------
+ * --zoom (1–1,3, se elige en el menú): la imagen se amplía manteniendo su proporción y se
+ * recorta lo que sobra por los lados. En horizontal no se aplica. */
+body.stretch .screen { aspect-ratio: auto; width: 100%; max-width: none; height: calc(100vw / 1.5 * var(--zoom, 1)); }
+body.stretch.snes .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 3 / 4 * var(--zoom, 1)); }
+body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1)) * 50%); right: auto; width: calc(var(--zoom, 1) * 100%); }
 @media (orientation: landscape) and (max-height: 600px) {
-  body.stretch .screen { width: auto; height: 100%; max-width: 100vw; aspect-ratio: 3 / 2; }
-  body.stretch.snes .screen { width: auto; height: 100%; max-width: 100vw; aspect-ratio: 4 / 3; }
   body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
 }
+/* Tamaño de los botones en vertical (--btn) */
+@media (orientation: portrait), (min-height: 601px) {
+  .dpad { --s: calc(min(42vw, 180px) * var(--btn, 1)); }
+  .ab { --s: calc(min(19vw, 78px) * var(--btn, 1)); }
+  body.snes .ab { --s: calc(min(15vw, 60px) * var(--btn, 1)); }
+}
+
+/* Barras de ajuste del menú */
+.adj { display: grid; gap: 4px; margin: 10px 0; font-size: 14px; }
+.adj span { display: flex; justify-content: space-between; font-weight: 700; }
+.adj b { color: var(--accent, #a68bff); font-weight: 800; }
+.adj input[type=range] { width: 100%; accent-color: var(--accent, #8f74ff); height: 28px; }
+.adj small { opacity: .65; font-size: 12px; }
 
 /* ---------- Horizontal: los botones nunca tapan el juego ----------
  * Cada lado tiene una columna para el mando (--side) y la pantalla usa solo el hueco del centro,
  * en su proporción. Va al final y con #id para mandar sobre las opciones de pantalla. */
 @media (orientation: landscape) and (max-height: 600px) {
-  #console { --side: clamp(140px, 21vw, 210px); }
+  #console { --side: max(110px, var(--side-user, clamp(140px, 21vw, 210px))); }
   #console #screen {
     height: auto; max-width: none; aspect-ratio: 3 / 2;
     width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 3 / 2));

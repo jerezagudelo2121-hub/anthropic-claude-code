@@ -239,8 +239,21 @@
       </section>
 
       <section class="menu-card">
+        <h3>📐 Ajustar pantalla y botones</h3>
+        <p class="hint">Mueve las barras y mira el cambio detrás del menú. La imagen nunca se deforma.</p>
+        <label class="adj"><span>Juego en vertical <b id="adj-zoom-v"></b></span>
+          <input type="range" id="adj-zoom" min="100" max="130" step="1">
+          <small>Más grande recorta un poco los lados.</small></label>
+        <label class="adj"><span>Mando en horizontal <b id="adj-side-v"></b></span>
+          <input type="range" id="adj-side" min="0" max="260" step="5">
+          <small>A la izquierda, más juego; a la derecha, botones más grandes. Del todo a la izquierda: automático.</small></label>
+        <label class="adj"><span>Tamaño de los botones (vertical) <b id="adj-btn-v"></b></span>
+          <input type="range" id="adj-btn" min="70" max="130" step="5"></label>
+        <button class="btn small ghost" type="button" id="adj-reset">↺ Como al principio</button>
+      </section>
+
+      <section class="menu-card">
         <h3>🎨 Personalizar</h3>
-        <label class="toggle"><input type="checkbox" id="stretch-toggle"> 🔍 Juego más grande (amplía un 12 % sin deformar; recorta un poco los lados)</label>
         <label class="toggle"><input type="checkbox" id="frame-toggle"> Aspecto de consola de mano (marco y altavoz)</label>
         <p class="hint">Diseño de la consola</p>
         <div class="skins" id="skins"></div>
