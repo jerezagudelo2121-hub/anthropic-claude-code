@@ -4,7 +4,7 @@
  * Estrategia "red primero": si hay conexión se usa siempre la versión nueva y se guarda una
  * copia; sin conexión se sirve la copia guardada. Así nunca se mezclan versiones antiguas. */
 
-const CACHE = "gbaweb-v2";
+const CACHE = "gbaweb-v3";
 const CORE = [
   "./",
   "index.html",
@@ -39,7 +39,8 @@ self.addEventListener("fetch", (event) => {
   // Solo archivos de esta web; el multijugador (PeerJS) y lo demás va directo a la red.
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(req)
+    // "no-cache": pregunta siempre al servidor si hay versión nueva (no usa la caché del navegador).
+    fetch(req.url, { cache: "no-cache" })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

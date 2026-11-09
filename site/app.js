@@ -6,6 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
+const APP_VERSION = "2026.11.09";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -1794,6 +1795,7 @@ async function diagnose() {
     : "⚠️ Retransmisión: no disponible ahora. Si vuestra fila de amigo dice 🚧, poned una <b>🛰️ Retransmisión propia</b> (más abajo): es gratis.");
   if (server === "ok" && (kinds.has("srflx") || kinds.has("relay"))) lines.push("👍 Desde aquí todo bien. Si aun así no conectáis, que tu amigo haga también la prueba.");
   lines.push("<small>Para probar tú solo usa <b>dos aparatos</b> (o Safari y Chrome) con apodos distintos: dos pestañas en el mismo móvil no sirven, la de atrás se pausa.</small>");
+  lines.push(`<small>Versión de la web: <b>${APP_VERSION}</b> (tu amigo debe tener la misma).</small>`);
   show(lines.join("<br>"));
 }
 document.addEventListener("click", (e) => { if (e.target.closest("[data-diagnose]")) diagnose(); });
@@ -2090,7 +2092,7 @@ const friends = {
 
   hello(id) {
     const f = id && this.find(id);
-    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && isRoomMode(net.mode), rel: f ? f.state : "none" };
+    return { t: "hi", nick: this.nick, game: engine ? romName : "", room: net.role === "host" && isRoomMode(net.mode), rel: f ? f.state : "none", v: APP_VERSION };
   },
 
   find(id) {
@@ -2131,7 +2133,11 @@ const friends = {
   onMessage(id, conn, m) {
     if (!m || typeof m !== "object") return;
     if (m.t === "hi") {
-      this.status.set(id, { game: m.game || "", room: !!m.room });
+      this.status.set(id, { game: m.game || "", room: !!m.room, v: m.v || "" });
+      if ((m.v || "") < APP_VERSION && !this.warnedOld) {
+        this.warnedOld = true;
+        toast(`${m.nick || "Tu amigo"} tiene una versión antigua de la web: que la cierre del todo y la vuelva a abrir.`, 7000);
+      }
       let f = this.find(id);
       if (!f && m.rel === "sent" && m.nick) {
         // Te ha llegado una solicitud de amistad.
@@ -2425,8 +2431,18 @@ window.addEventListener("popstate", () => {
   trapBack();
 });
 
+$("#app-version").textContent = "Versión " + APP_VERSION;
+
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
-  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Sin modo sin conexión", e));
+  navigator.serviceWorker.register("sw.js").then((reg) => reg.update()).catch((e) => console.warn("Sin modo sin conexión", e));
+  // Si llega una versión nueva mientras estás en el menú, se recarga sola para usarla.
+  // (la primera vez que se instala no hace falta: ya estás usando la versión nueva).
+  let swReloaded = !navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (swReloaded || engine || net.role) { swReloaded = true; return; }
+    swReloaded = true;
+    location.reload();
+  });
 }
 
 /* ---------- Sin zoom accidental del navegador (iPhone ignora user-scalable=no) ---------- */
