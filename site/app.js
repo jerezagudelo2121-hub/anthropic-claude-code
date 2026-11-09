@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.11";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.12";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -75,6 +75,7 @@ const db = (() => {
     put: (store, value, key) => run(store, "readwrite", (s) => s.put(value, key)),
     del: (store, key) => run(store, "readwrite", (s) => s.delete(key)),
     all: (store) => run(store, "readonly", (s) => s.getAll()),
+    keys: (store) => run(store, "readonly", (s) => s.getAllKeys()),
   };
 })();
 
@@ -572,6 +573,11 @@ async function startGame(file, record, pid) {
     if (saved) engine.setSave(saved);
     lastSave = engine.getSave();
     engine.onFrame = pollGamepads;
+    engine.setVolume(prefs.volume);
+    if (prefs.muteStart) {
+      engine.setMuted(true);
+      $("[data-action=mute]").textContent = "🔇 Sin sonido";
+    }
     engine.resumeAudio();
     engine.start();
     lastCover = Date.now() - COVER_EVERY_MS / 2; // primera portada a los ~15 s
@@ -757,7 +763,7 @@ function pollGamepads() {
 
 // Avance rápido: velocidad elegida en el menú (x1–x8) o botón ⏩ mantenido (al menos x4).
 // En multijugador se desactiva: la otra consola seguiría a velocidad normal y se perdería la conexión.
-const HOLD_SPEED = 4;
+let HOLD_SPEED = Number(lsGet("gbaweb-hold")) || 4;   // se elige en Ajustes
 let ffHold = false;
 let chosenSpeed = 1;
 
@@ -1025,6 +1031,8 @@ $("#bg-input").addEventListener("change", async (e) => {
 /* ---------- Menú ---------- */
 
 function openMenu() {
+  if (document.body.classList.contains("preview")) return openSettings();
+  mountShared("menu");
   updatePressed([]);
   $("#menu").hidden = false;
   updateFastForward();
@@ -1036,6 +1044,170 @@ function closeMenu() {
 }
 
 $("#btn-menu").addEventListener("click", openMenu);
+/* ---------- Ajustes (desde el inicio) ----------
+ * Las tarjetas de Gráficos, Ajustar pantalla y Personalizar son las mismas que las del menú
+ * del juego: se mueven a la ventana que se abra. */
+const prefs = {
+  volume: lsGet("gbaweb-volume") === null || lsGet("gbaweb-volume") === "" ? 1 : Number(lsGet("gbaweb-volume")),
+  muteStart: lsGet("gbaweb-mute-start") === "1",
+};
+function mountShared(where) {
+  for (const id of ["gfx", "adj", "look"]) {
+    const card = $("#card-" + id);
+    const target = where === "settings" ? $("#settings-shared") : $("#slot-" + id);
+    if (card.parentNode !== target) target.appendChild(card);
+  }
+}
+function renderSettings() {
+  $("#set-vol").value = Math.round(prefs.volume * 100);
+  $("#set-vol-v").textContent = Math.round(prefs.volume * 100) + " %";
+  $("#set-mute-start").checked = prefs.muteStart;
+  for (const b of document.querySelectorAll("[data-hold]")) b.classList.toggle("primary", Number(b.dataset.hold) === HOLD_SPEED);
+  $("#set-pad-hidden").checked = document.body.classList.contains("pad-hidden");
+  $("#set-vibe-row").hidden = !android.canVibrate;
+  $("#set-vibe").checked = android.vibration;
+  $("#about-version").textContent = "Versión " + APP_VERSION;
+  const preview = document.body.classList.contains("preview");
+  $("#preview-exit").hidden = !preview;
+  $("#settings").classList.toggle("see-through", preview);
+  updateStorageInfo2();
+}
+async function updateStorageInfo2() {
+  const el = $("#storage-info");
+  try {
+    const [saves, states] = await Promise.all([db.keys("saves"), db.keys("states")]);
+    let txt = `${saves.length} partida(s) guardada(s) y ${states.length} guardado(s) rápido(s) en este dispositivo.`;
+    if (navigator.storage && navigator.storage.estimate) txt += ` Ocupa ${formatSize((await navigator.storage.estimate()).usage)}.`;
+    el.textContent = txt;
+  } catch (e) { el.textContent = ""; }
+}
+function openSettings() {
+  mountShared("settings");
+  applyGraphics();
+  renderLook();
+  renderSettings();
+  $("#settings").hidden = false;
+  if (document.body.classList.contains("preview")) setTimeout(() => $("#card-adj").scrollIntoView({ block: "start" }), 30);
+}
+function closeSettings() {
+  $("#settings").hidden = true;
+  mountShared("menu");
+}
+$("#open-settings").addEventListener("click", openSettings);
+$("#settings-close").addEventListener("click", closeSettings);
+$("#settings-done").addEventListener("click", closeSettings);
+$("#settings").addEventListener("click", (e) => { if (e.target.id === "settings") closeSettings(); });
+
+$("#set-vol").addEventListener("input", (e) => {
+  prefs.volume = Number(e.target.value) / 100;
+  saveSetting("gbaweb-volume", String(prefs.volume));
+  if (engine) engine.setVolume(prefs.volume);
+  $("#set-vol-v").textContent = Math.round(prefs.volume * 100) + " %";
+});
+$("#set-mute-start").addEventListener("change", (e) => {
+  prefs.muteStart = e.target.checked;
+  saveSetting("gbaweb-mute-start", prefs.muteStart ? "1" : "0");
+});
+$("#set-hold").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-hold]");
+  if (!b) return;
+  HOLD_SPEED = Number(b.dataset.hold);
+  saveSetting("gbaweb-hold", String(HOLD_SPEED));
+  updateFastForward();
+  renderSettings();
+});
+$("#set-pad-hidden").addEventListener("change", (e) => setPadHidden(e.target.checked));
+$("#set-vibe").addEventListener("change", (e) => {
+  android.vibration = e.target.checked;
+  saveSetting("gbaweb-vibration", android.vibration ? "1" : "0");
+  renderAndroid();
+});
+$("#check-update").addEventListener("click", async () => {
+  try {
+    const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+    if (reg) await reg.update();
+  } catch (e) { /* sin service worker */ }
+  toast("Buscando la última versión…");
+  setTimeout(() => location.reload(), 800);
+});
+
+// Vista previa: la consola con una imagen de ejemplo, para ajustar pantalla y botones.
+function enterPreview(sys) {
+  if (engine) return toast("Sal del juego para usar la vista previa");
+  closeSettings();
+  document.body.classList.add("preview");
+  document.body.classList.toggle("snes", sys === "snes");
+  $("#game-title").textContent = "Vista previa";
+  screenMsg("");
+  showView("console");
+  toast("Toca ☰ para ajustar. Se ve el cambio al momento.", 4000);
+}
+function exitPreview() {
+  document.body.classList.remove("preview", "snes");
+  closeSettings();
+  showView("home");
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-preview]");
+  if (b) enterPreview(b.dataset.preview);
+});
+$("#preview-exit").addEventListener("click", exitPreview);
+
+/* ---------- Copias de seguridad de todas las partidas ---------- */
+const enc = (s) => encodeURIComponent(s);
+$("#backup-export").addEventListener("click", async () => {
+  try {
+    if (engine) await persistSave();
+    const files = {};
+    const [saveKeys, saves, stateKeys, states, roms] = await Promise.all([db.keys("saves"), db.all("saves"), db.keys("states"), db.all("states"), db.all("roms")]);
+    saveKeys.forEach((k, i) => { if (saves[i]) files["saves/" + enc(k) + ".sav"] = new Uint8Array(saves[i]); });
+    stateKeys.forEach((k, i) => { if (states[i] && states[i].data) files["states/" + enc(k) + "@" + (states[i].time || 0) + ".state"] = new Uint8Array(states[i].data); });
+    const meta = { app: "gbaweb", version: APP_VERSION, date: new Date().toISOString(), roms: roms.map((r) => ({ name: r.name, title: r.title, saves: r.saves, current: r.current, system: r.system })) };
+    files["copia.json"] = fflate.strToU8(JSON.stringify(meta, null, 1));
+    if (!saveKeys.length && !stateKeys.length) return toast("Aún no tienes partidas guardadas");
+    const zip = fflate.zipSync(files, { level: 6 });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+    a.download = `partidas-gbaweb-${new Date().toISOString().slice(0, 10)}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(`Copia creada: ${saveKeys.length} partida(s) y ${stateKeys.length} guardado(s) rápido(s). Guárdala en Archivos o iCloud.`, 6000);
+  } catch (err) {
+    console.error(err);
+    toast("No se pudo crear la copia: " + err.message, 5000);
+  }
+});
+$("#backup-import").addEventListener("click", () => $("#backup-input").click());
+$("#backup-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const files = fflate.unzipSync(new Uint8Array(await file.arrayBuffer()));
+    if (!files["copia.json"]) throw new Error("no es una copia de este emulador");
+    const meta = JSON.parse(fflate.strFromU8(files["copia.json"]));
+    let ns = 0, nt = 0;
+    for (const [path, data] of Object.entries(files)) {
+      let m;
+      if ((m = /^saves\/(.+)\.sav$/.exec(path))) { await db.put("saves", data, decodeURIComponent(m[1])); ns++; }
+      else if ((m = /^states\/(.+)@(\d+)\.state$/.exec(path))) { await db.put("states", { data, time: Number(m[2]) || Date.now() }, decodeURIComponent(m[1])); nt++; }
+    }
+    // Nombres de las partidas: se juntan con los juegos que ya tienes; los que falten se quedan
+    // en la biblioteca pidiendo la ROM (al elegirla, sigues con tu partida).
+    for (const r of meta.roms || []) {
+      const cur = await safeGet("roms", r.name);
+      if (cur) await db.put("roms", { ...cur, title: cur.title || r.title, saves: r.saves || cur.saves, current: r.current || cur.current });
+      else await db.put("roms", { name: r.name, title: r.title, saves: r.saves, current: r.current, system: r.system, missing: true, added: Date.now() });
+    }
+    await loadLibrary();
+    renderSettings();
+    toast(`Copia restaurada: ${ns} partida(s) y ${nt} guardado(s) rápido(s).`, 6000);
+  } catch (err) {
+    console.error(err);
+    toast("No se pudo importar: " + err.message, 5000);
+  }
+});
+
 $("#menu").addEventListener("click", (e) => {
   if (e.target.id === "menu") closeMenu();
 });

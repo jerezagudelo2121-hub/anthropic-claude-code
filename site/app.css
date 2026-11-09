@@ -714,3 +714,29 @@ body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1))
   .meta .pill { width: calc((var(--side) - 26px) / 2); }
   .turbo { left: calc(10px + var(--safe-l)); }
 }
+
+/* ---------- Ajustes desde el inicio y vista previa ---------- */
+.settings-btn { margin: 10px auto 0; display: block; }
+#settings { z-index: 11; }
+.sheet.see-through { background: rgba(6, 4, 16, .25); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.sheet.see-through { align-items: flex-start; }
+.sheet.see-through .sheet-body { max-height: 46dvh; margin-top: calc(var(--safe-t) + 4px); border-radius: 0 0 22px 22px; }
+#settings .menu-foot { grid-template-columns: 1fr; }
+#settings .bios-row { margin: 0; padding: 0; border: 0; background: none; }
+.preview-card .btn.danger { margin-top: 8px; width: 100%; }
+.preview-art { display: none; }
+body.preview .preview-art {
+  display: flex; position: absolute; inset: 0; align-items: flex-end; justify-content: center; padding-bottom: 6%;
+  background:
+    radial-gradient(14% 20% at 22% 30%, #fff 0 60%, transparent 62%),
+    radial-gradient(10% 14% at 30% 26%, #fff 0 60%, transparent 62%),
+    linear-gradient(180deg, transparent 72%, #3f9a3a 72% 76%, #8a5a32 76%),
+    radial-gradient(30% 40% at 75% 72%, #2f7d32 0 60%, transparent 62%),
+    linear-gradient(180deg, #7ec8ff, #c9ecff 70%);
+  image-rendering: pixelated;
+}
+body.preview .preview-art span { background: #000a; color: #fff; font-weight: 800; font-size: 13px; padding: 6px 10px; border-radius: 10px; }
+body.stretch.preview .preview-art { left: calc((1 - var(--zoom, 1)) * 50%); right: auto; width: calc(var(--zoom, 1) * 100%); }
+@media (orientation: landscape) and (max-height: 600px) {
+  body.stretch.preview .preview-art { left: 0; width: 100%; }
+}
