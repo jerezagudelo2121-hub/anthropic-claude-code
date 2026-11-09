@@ -578,3 +578,6 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 .turn-state { color: var(--green); }
 
 .app-version { margin: 4px 0 0; font-size: 11px; opacity: .55; letter-spacing: .5px; }
+
+#ask-sheet { z-index: 30; }
+.ask-input { width: 100%; padding: 12px 14px; margin: 6px 0 14px; border-radius: 12px; border: 1px solid #ffffff2a; background: #0004; color: inherit; font: inherit; font-size: 17px; }

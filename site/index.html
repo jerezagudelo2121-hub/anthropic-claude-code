@@ -298,6 +298,18 @@
   </div>
 </div>
 
+<!-- Pedir un texto (en lugar de prompt(), que en la app de la pantalla de inicio del iPhone puede no salir) -->
+<div id="ask-sheet" class="sheet center" hidden>
+  <form class="sheet-body invite-card" id="ask-form">
+    <h2 id="ask-title"></h2>
+    <input id="ask-input" type="text" maxlength="30" autocomplete="off" class="ask-input">
+    <div class="grid">
+      <button type="button" id="ask-cancel" class="btn">Cancelar</button>
+      <button type="submit" id="ask-ok" class="btn primary">Aceptar</button>
+    </div>
+  </form>
+</div>
+
 <!-- Partidas de un juego -->
 <div id="saves-sheet" class="sheet" hidden>
   <div class="sheet-body">
