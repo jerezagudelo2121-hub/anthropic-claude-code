@@ -665,3 +665,15 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 .game-card.missing .cover { filter: grayscale(1) brightness(.6); }
 .game-card.missing small { color: #f5b94a; }
 #screen-msg .btn { margin: 10px 0; }
+
+/* ---------- Juego a pantalla llena ----------
+ * La imagen ocupa todo el hueco libre (se estira; sin bandas). En vertical el mando se queda
+ * con la altura justa y el resto es para el juego. */
+body.stretch .screen-wrap { flex: 1 1 auto; min-height: 0; }
+body.stretch .screen, body.stretch.snes .screen { aspect-ratio: auto; width: 100%; height: 100%; max-width: none; border-radius: 0; }
+body.stretch .pad { flex: 0 0 min(40dvh, 270px); min-height: 0; }
+body.stretch.pad-hidden .screen-wrap { flex: 1 1 auto; }
+@media (orientation: landscape) and (max-height: 600px) {
+  body.stretch .screen, body.stretch.snes .screen { width: 100vw; height: 100%; }
+  body.stretch .pad { flex: none; }
+}

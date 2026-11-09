@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.10b";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.10c";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -868,15 +868,18 @@ const BACKGROUNDS = [
 
 const look = {
   skin: lsGet("gbaweb-skin") || "morado",
-  frame: lsGet("gbaweb-frame") !== "0",   // aspecto de consola de mano (activado por defecto)
+  frame: lsGet("gbaweb-frame") === "1",   // aspecto de consola de mano
+  stretch: lsGet("gbaweb-stretch") === "1", // llenar toda la pantalla (estira la imagen)
   bg: lsGet("gbaweb-bg"),
   photoUrl: "",
 };
 
 async function applyLook() {
   document.body.dataset.skin = look.skin;
-  document.body.classList.toggle("frame", look.frame);
+  document.body.classList.toggle("frame", look.frame && !look.stretch);
+  document.body.classList.toggle("stretch", look.stretch);
   $("#frame-toggle").checked = look.frame;
+  $("#stretch-toggle").checked = look.stretch;
   let image = "";
   if (look.bg === "foto") {
     if (!look.photoUrl) {
@@ -896,6 +899,15 @@ async function applyLook() {
 
 $("#frame-toggle").addEventListener("change", (e) => {
   look.frame = e.target.checked;
+  if (look.frame) look.stretch = false;
+  saveSetting("gbaweb-frame", look.frame ? "1" : "0");
+  saveSetting("gbaweb-stretch", look.stretch ? "1" : "0");
+  applyLook();
+});
+$("#stretch-toggle").addEventListener("change", (e) => {
+  look.stretch = e.target.checked;
+  if (look.stretch) look.frame = false;
+  saveSetting("gbaweb-stretch", look.stretch ? "1" : "0");
   saveSetting("gbaweb-frame", look.frame ? "1" : "0");
   applyLook();
 });
