@@ -25,6 +25,7 @@
     <div class="logo">GBA<span>web</span></div>
     <p class="tagline">Game Boy Advance y Super Nintendo en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
     <p class="app-version" id="app-version"></p>
+    <button class="btn settings-btn" type="button" id="open-settings">⚙️ Ajustes</button>
 
     <div id="invite-banner" class="banner" hidden></div>
 
@@ -90,14 +91,6 @@
       </a>
     </section>
 
-    <div class="bios-row">
-      <div>
-        <b>BIOS de GBA</b> <span id="bios-status" class="badge">No cargada</span>
-        <p class="hint">Opcional (<code>gba_bios.bin</code>). Algunos juegos funcionan mejor con ella. Quetzal no la necesita.</p>
-      </div>
-      <label class="btn" for="bios-input">Elegir</label>
-      <input id="bios-input" type="file" hidden>
-    </div>
 
     <div class="divider"><span>o</span></div>
 
@@ -135,6 +128,7 @@
       <canvas id="game" width="240" height="160"></canvas>
       <video id="remote-video" playsinline autoplay muted hidden></video>
       <div id="screen-msg" class="screen-msg" hidden></div>
+      <div class="preview-art" aria-hidden="true"><span>Vista previa · aquí se verá el juego</span></div>
     </div>
     <div class="bezel-label" aria-hidden="true">
       <span class="bz-power"><i></i>POWER</span>
@@ -227,7 +221,7 @@
         </details>
       </section>
 
-      <section class="menu-card">
+      <div id="slot-gfx"><section class="menu-card" id="card-gfx">
         <h3>✨ Gráficos</h3>
         <div class="shaders" id="shaders">
           <button class="shader-btn" data-shader="pixel"><span class="sw sw-pixel"></span>Original<small>Píxeles nítidos</small></button>
@@ -236,9 +230,9 @@
           <button class="shader-btn" data-shader="crt"><span class="sw sw-crt"></span>CRT<small>Tele antigua</small></button>
         </div>
         <label class="toggle"><input type="checkbox" id="color-correct"> Colores de la GBA original</label>
-      </section>
+      </section></div>
 
-      <section class="menu-card">
+      <div id="slot-adj"><section class="menu-card" id="card-adj">
         <h3>📐 Ajustar pantalla y botones</h3>
         <p class="hint">Mueve las barras y mira el cambio detrás del menú. La imagen nunca se deforma.</p>
         <label class="adj"><span>Juego en vertical <b id="adj-zoom-v"></b></span>
@@ -250,9 +244,9 @@
         <label class="adj"><span>Tamaño de los botones (vertical) <b id="adj-btn-v"></b></span>
           <input type="range" id="adj-btn" min="70" max="130" step="5"></label>
         <button class="btn small ghost" type="button" id="adj-reset">↺ Como al principio</button>
-      </section>
+      </section></div>
 
-      <section class="menu-card">
+      <div id="slot-look"><section class="menu-card" id="card-look">
         <h3>🎨 Personalizar</h3>
         <label class="toggle"><input type="checkbox" id="frame-toggle"> Aspecto de consola de mano (marco y altavoz)</label>
         <p class="hint">Diseño de la consola</p>
@@ -260,7 +254,7 @@
         <p class="hint">Fondo</p>
         <div class="bgs" id="bgs"></div>
         <input id="bg-input" type="file" accept="image/*" hidden>
-      </section>
+      </section></div>
 
       <section class="menu-card">
         <h3>⏩ Velocidad <small id="speed-note"></small></h3>
@@ -301,6 +295,104 @@
     <div class="grid menu-foot">
       <button class="btn danger" data-action="quit">⏏ Salir</button>
       <button class="btn primary" data-action="close-menu">▶ Volver al juego</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Ajustes (desde el inicio, sin abrir un juego) -->
+<div id="settings" class="sheet" hidden>
+  <div class="sheet-body">
+    <div class="sheet-handle"></div>
+    <div class="menu-head">
+      <h2>⚙️ Ajustes</h2>
+      <button class="icon-btn" id="settings-close" aria-label="Cerrar">✕</button>
+    </div>
+
+    <section class="menu-card preview-card">
+      <h3>👀 Vista previa</h3>
+      <p class="hint">Mira cómo quedan la pantalla y los botones sin abrir un juego, y ajústalos con este mismo menú.</p>
+      <div class="grid">
+        <button class="btn primary" type="button" data-preview="gba">▶ Probar (GBA)</button>
+        <button class="btn" type="button" data-preview="snes">▶ Probar (Super Nintendo)</button>
+      </div>
+      <button class="btn danger" type="button" id="preview-exit" hidden>✕ Salir de la vista previa</button>
+    </section>
+
+    <div id="settings-shared"></div>
+
+    <section class="menu-card">
+      <h3>🔊 Sonido</h3>
+      <label class="adj"><span>Volumen <b id="set-vol-v"></b></span><input type="range" id="set-vol" min="0" max="100" step="5"></label>
+      <label class="toggle"><input type="checkbox" id="set-mute-start"> Empezar los juegos sin sonido</label>
+    </section>
+
+    <section class="menu-card">
+      <h3>🎮 Controles</h3>
+      <p class="hint">Velocidad al mantener ⏩</p>
+      <div class="speeds" id="set-hold">
+        <button class="btn" type="button" data-hold="2">x2</button>
+        <button class="btn" type="button" data-hold="3">x3</button>
+        <button class="btn" type="button" data-hold="4">x4</button>
+        <button class="btn" type="button" data-hold="8">x8</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="set-pad-hidden"> Ocultar el mando en pantalla (juego con mando Bluetooth o teclado)</label>
+      <label class="toggle" id="set-vibe-row" hidden><input type="checkbox" id="set-vibe"> Vibrar al pulsar los botones</label>
+      <details class="help">
+        <summary>Mando Bluetooth y teclado</summary>
+        <p><b>Mando:</b> se usa solo al conectarlo (botón de abajo = B, derecha = A, izquierda = Y, arriba = X, gatillos = L/R).</p>
+        <p><b>Teclado:</b> flechas, Z = A, X = B, C = Y, D = X, Q/A = L, E/S = R, Intro = START, V = SELECT.</p>
+      </details>
+    </section>
+
+    <section class="menu-card">
+      <h3>💾 Copias de seguridad</h3>
+      <p class="hint">Guarda en un archivo <b>todas tus partidas</b> (y los guardados rápidos) para no perderlas nunca: en Archivos, iCloud o donde quieras. Las ROMs no se incluyen.</p>
+      <div class="grid">
+        <button class="btn primary" type="button" id="backup-export">⬇️ Exportar todo</button>
+        <button class="btn" type="button" id="backup-import">⬆️ Importar copia</button>
+      </div>
+      <input id="backup-input" type="file" accept=".zip,application/zip" hidden>
+      <p class="hint" id="storage-info"></p>
+    </section>
+
+    <section class="menu-card">
+      <h3>🧩 BIOS</h3>
+      <div class="bios-row">
+      <div>
+        <b>BIOS de GBA</b> <span id="bios-status" class="badge">No cargada</span>
+        <p class="hint">Opcional (<code>gba_bios.bin</code>). Algunos juegos funcionan mejor con ella. Quetzal no la necesita.</p>
+      </div>
+      <label class="btn" for="bios-input">Elegir</label>
+      <input id="bios-input" type="file" hidden>
+    </div>
+    </section>
+
+    <section class="menu-card">
+      <h3>🌐 Conexión</h3>
+      <button class="btn small ghost" type="button" data-diagnose>🩺 Probar mi conexión</button>
+      <p class="hint diag-out" hidden></p>
+      <details class="turn-box">
+        <summary>🛰️ Retransmisión propia (opcional, más rápida)</summary>
+        <p class="hint">No hace falta: si vuestras redes no se dejan unir, la web ya conecta sola a través del servidor. Pero un servidor de retransmisión (TURN) propio va más rápido. Crea una cuenta gratis en <b>expressturn.com</b> (o metered.ca) y pega aquí sus datos. Basta con que lo ponga <b>uno de los dos</b>.</p>
+        <form class="turn-form">
+          <input name="urls" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Servidor (p. ej. relay1.expressturn.com:3478)" aria-label="Servidor TURN">
+          <input name="username" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Usuario" aria-label="Usuario TURN">
+          <input name="credential" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Contraseña" aria-label="Contraseña TURN">
+          <button class="btn small" type="submit">Guardar</button>
+          <small class="turn-state"></small>
+        </form>
+      </details>
+    </section>
+
+    <section class="menu-card">
+      <h3>ℹ️ Acerca de</h3>
+      <p class="hint"><b id="about-version"></b> · Núcleos: gpSP (GBA) y snes9x2005 (Super Nintendo). Tus juegos y partidas se quedan en este dispositivo.</p>
+      <button class="btn small" type="button" id="check-update">🔄 Buscar actualización</button>
+    </section>
+
+    <div class="grid menu-foot">
+      <button class="btn primary" type="button" id="settings-done">✓ Listo</button>
     </div>
   </div>
 </div>

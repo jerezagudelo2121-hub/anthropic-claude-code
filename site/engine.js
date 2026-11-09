@@ -39,6 +39,7 @@ class GbaEngine {
     this.running = false;
     this.speed = 1;          // 1 = normal; 2, 3, 4, 8 = avance rápido
     this.muted = false;
+    this.volume = 1;         // 0–1
     this.netQueue = [];      // paquetes recibidos: { client, data }
     this.onNetSend = null;   // (Uint8Array, clientId) => void
     this.onFrame = null;
@@ -229,7 +230,7 @@ class GbaEngine {
     const node = ctx.createScriptProcessor(2048, 0, 2);
     node.onaudioprocess = (e) => this.fillAudio(e.outputBuffer);
     this.gain = ctx.createGain();
-    this.gain.gain.value = this.muted ? 0 : 1;
+    this.gain.gain.value = this.muted ? 0 : this.volume;
     node.connect(this.gain);
     this.gain.connect(ctx.destination);
     this.streamDest = ctx.createMediaStreamDestination ? ctx.createMediaStreamDestination() : null;
@@ -246,7 +247,12 @@ class GbaEngine {
 
   setMuted(m) {
     this.muted = m;
-    if (this.gain) this.gain.gain.value = m ? 0 : 1;
+    if (this.gain) this.gain.gain.value = m ? 0 : this.volume;
+  }
+
+  setVolume(v) {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.gain) this.gain.gain.value = this.muted ? 0 : this.volume;
   }
 
   ringFill() {
