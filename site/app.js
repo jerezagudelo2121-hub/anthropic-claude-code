@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.10";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.10b";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -851,6 +851,10 @@ const SKINS = [
   { id: "electrico", name: "Amarillo eléctrico", shell: "linear-gradient(#ffd84a,#f4b000)", key: "#2a2a2a", a: "#e8402f", b: "#e8402f" },
   { id: "neon", name: "Neón", shell: "#07060f", key: "#00e5ff", a: "#ff2bd6", b: "#00d5f0" },
   { id: "negro", name: "Negro mate", shell: "linear-gradient(#1e1e20,#0c0c0d)", key: "#2c2c30", a: "#3a3a40", b: "#3a3a40" },
+  { id: "coral", name: "Coral", shell: "linear-gradient(#ff8a7a,#e85d50)", key: "#3a2a2e", a: "#2a2a30", b: "#2a2a30" },
+  { id: "cielo", name: "Azul cielo", shell: "linear-gradient(#8fd0ff,#4f9fe0)", key: "#24364f", a: "#ffd23f", b: "#ffd23f" },
+  { id: "menta", name: "Verde menta", shell: "linear-gradient(#a8f0d0,#5fcf9f)", key: "#244a3a", a: "#ff6a8a", b: "#ff6a8a" },
+  { id: "hielo", name: "Hielo transparente", shell: "linear-gradient(160deg,#dff3ffcc,#9fd4f5aa)", key: "#3b5f80", a: "#ffffff", b: "#ffffff" },
 ];
 
 const BACKGROUNDS = [
@@ -864,12 +868,15 @@ const BACKGROUNDS = [
 
 const look = {
   skin: lsGet("gbaweb-skin") || "morado",
+  frame: lsGet("gbaweb-frame") !== "0",   // aspecto de consola de mano (activado por defecto)
   bg: lsGet("gbaweb-bg"),
   photoUrl: "",
 };
 
 async function applyLook() {
   document.body.dataset.skin = look.skin;
+  document.body.classList.toggle("frame", look.frame);
+  $("#frame-toggle").checked = look.frame;
   let image = "";
   if (look.bg === "foto") {
     if (!look.photoUrl) {
@@ -886,6 +893,12 @@ async function applyLook() {
   else document.body.style.removeProperty("--bg-image");
   renderLook();
 }
+
+$("#frame-toggle").addEventListener("change", (e) => {
+  look.frame = e.target.checked;
+  saveSetting("gbaweb-frame", look.frame ? "1" : "0");
+  applyLook();
+});
 
 function renderLook() {
   const skins = $("#skins");
