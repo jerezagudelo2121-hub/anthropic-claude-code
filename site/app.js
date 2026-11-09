@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.09";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.09b";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -268,6 +268,30 @@ function playRom(rom, pid) {
   startGame(new File([rom.data], rom.name), rom, pid);
 }
 
+// Pide un texto con una ventana propia; devuelve null si se cancela.
+function askText(title, value = "", okLabel = "Aceptar", maxLength = 30) {
+  return new Promise((resolve) => {
+    const sheet = $("#ask-sheet"), input = $("#ask-input"), form = $("#ask-form");
+    $("#ask-title").textContent = title;
+    $("#ask-ok").textContent = okLabel;
+    input.maxLength = maxLength;
+    input.value = value;
+    sheet.hidden = false;
+    setTimeout(() => { input.focus(); input.select(); }, 50);
+    const done = (v) => {
+      sheet.hidden = true;
+      form.onsubmit = null;
+      $("#ask-cancel").onclick = null;
+      sheet.onclick = null;
+      input.blur();
+      resolve(v);
+    };
+    form.onsubmit = (e) => { e.preventDefault(); done(input.value); };
+    $("#ask-cancel").onclick = () => done(null);
+    sheet.onclick = (e) => { if (e.target === sheet) done(null); };
+  });
+}
+
 let savesRom = null;
 
 async function openSaves(romOrName) {
@@ -317,7 +341,7 @@ $("#saves-sheet").addEventListener("click", async (e) => {
     return playRom(rom, pid);
   }
   if (btn.dataset.sv === "rename") {
-    const name = prompt("Nombre de la partida:", p.name);
+    const name = await askText("✏️ Nombre de la partida", p.name, "Guardar");
     if (!name || !name.trim()) return;
     p.name = name.trim().slice(0, 30);
     await setPartidas(rom, list);
@@ -343,7 +367,7 @@ $("#ss-new").onclick = async () => {
   const rom = savesRom;
   if (!rom) return;
   const list = partidas(rom).map((p) => ({ ...p }));
-  const name = prompt("Nombre de la nueva partida:", `Partida ${list.length + 1}`);
+  const name = await askText("➕ Nueva partida", `Partida ${list.length + 1}`, "Empezar");
   if (name === null) return;
   const id = Date.now().toString(36);
   list.push({ id, name: (name.trim() || `Partida ${list.length + 1}`).slice(0, 30) });
@@ -380,7 +404,7 @@ $("#game-sheet").addEventListener("click", async (e) => {
       $("#game-sheet").hidden = true;
       return openSaves(rom);
     case "rename": {
-      const title = prompt("Nuevo nombre:", romTitle(rom));
+      const title = await askText("✏️ Nombre del juego", romTitle(rom), "Guardar", 60);
       if (!title || !title.trim()) return;
       await updateRom(rom.name, { title: title.trim() });
       break;
@@ -2351,9 +2375,9 @@ $("#nick-form").addEventListener("submit", (e) => {
   toast(`¡Hola, ${nick}! Dale tu apodo a tus amigos para que te añadan.`, 4000);
 });
 
-$("#nick-edit").addEventListener("click", () => {
+$("#nick-edit").addEventListener("click", async () => {
   if (net.role) return toast("Termina el multijugador para cambiar tu apodo");
-  const nick = prompt("Tu nuevo apodo:", friends.nick);
+  const nick = await askText("👤 Tu nuevo apodo", friends.nick, "Guardar", 20);
   if (!nick || nickId(nick).length < 3) return;
   friends.nick = nick.trim().slice(0, 20);
   friends.justSet = true;
