@@ -6,7 +6,7 @@ const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
 const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
 const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.10e";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.11";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -869,17 +869,31 @@ const BACKGROUNDS = [
 const look = {
   skin: lsGet("gbaweb-skin") || "morado",
   frame: lsGet("gbaweb-frame") === "1",   // aspecto de consola de mano
-  stretch: lsGet("gbaweb-stretch") === "1", // juego ampliado (recorta un poco los lados, sin deformar)
+  // Ajustes manuales: ampliación en vertical (1 = sin recortar), ancho de las columnas del mando
+  // en horizontal (px; 0 = automático) y tamaño de los botones.
+  zoom: Number(lsGet("gbaweb-zoom")) || (lsGet("gbaweb-stretch") === "1" ? 1.12 : 1),
+  side: Number(lsGet("gbaweb-side")) || 0,
+  btn: Number(lsGet("gbaweb-btn")) || 1,
   bg: lsGet("gbaweb-bg"),
   photoUrl: "",
 };
 
 async function applyLook() {
   document.body.dataset.skin = look.skin;
-  document.body.classList.toggle("frame", look.frame && !look.stretch);
-  document.body.classList.toggle("stretch", look.stretch);
+  const zoomed = look.zoom > 1.001;
+  document.body.classList.toggle("frame", look.frame && !zoomed);
+  document.body.classList.toggle("stretch", zoomed);
+  const st = document.body.style;
+  st.setProperty("--zoom", look.zoom);
+  st.setProperty("--btn", look.btn);
+  if (look.side) st.setProperty("--side-user", look.side + "px"); else st.removeProperty("--side-user");
   $("#frame-toggle").checked = look.frame;
-  $("#stretch-toggle").checked = look.stretch;
+  $("#adj-zoom").value = Math.round(look.zoom * 100);
+  $("#adj-side").value = look.side || 0;
+  $("#adj-btn").value = Math.round(look.btn * 100);
+  $("#adj-zoom-v").textContent = zoomed ? `+${Math.round(look.zoom * 100 - 100)} %` : "Normal";
+  $("#adj-side-v").textContent = look.side ? `${look.side} px` : "Automático";
+  $("#adj-btn-v").textContent = Math.round(look.btn * 100) + " %";
   let image = "";
   if (look.bg === "foto") {
     if (!look.photoUrl) {
@@ -899,17 +913,32 @@ async function applyLook() {
 
 $("#frame-toggle").addEventListener("change", (e) => {
   look.frame = e.target.checked;
-  if (look.frame) look.stretch = false;
+  if (look.frame) { look.zoom = 1; saveSetting("gbaweb-zoom", "1"); }
   saveSetting("gbaweb-frame", look.frame ? "1" : "0");
-  saveSetting("gbaweb-stretch", look.stretch ? "1" : "0");
   applyLook();
 });
-$("#stretch-toggle").addEventListener("change", (e) => {
-  look.stretch = e.target.checked;
-  if (look.stretch) look.frame = false;
-  saveSetting("gbaweb-stretch", look.stretch ? "1" : "0");
-  saveSetting("gbaweb-frame", look.frame ? "1" : "0");
+// Barras de ajuste: se ve el cambio al momento.
+$("#adj-zoom").addEventListener("input", (e) => {
+  look.zoom = Number(e.target.value) / 100;
+  if (look.zoom > 1.001 && look.frame) { look.frame = false; saveSetting("gbaweb-frame", "0"); }
+  saveSetting("gbaweb-zoom", String(look.zoom));
   applyLook();
+});
+$("#adj-side").addEventListener("input", (e) => {
+  look.side = Number(e.target.value);
+  saveSetting("gbaweb-side", String(look.side));
+  applyLook();
+});
+$("#adj-btn").addEventListener("input", (e) => {
+  look.btn = Number(e.target.value) / 100;
+  saveSetting("gbaweb-btn", String(look.btn));
+  applyLook();
+});
+$("#adj-reset").addEventListener("click", () => {
+  Object.assign(look, { zoom: 1, side: 0, btn: 1 });
+  for (const k of ["gbaweb-zoom", "gbaweb-side", "gbaweb-btn", "gbaweb-stretch"]) saveSetting(k, "");
+  applyLook();
+  toast("Pantalla y botones como al principio");
 });
 
 function renderLook() {
