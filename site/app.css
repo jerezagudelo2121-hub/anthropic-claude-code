@@ -581,3 +581,7 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 
 #ask-sheet { z-index: 30; }
 .ask-input { width: 100%; padding: 12px 14px; margin: 6px 0 14px; border-radius: 12px; border: 1px solid #ffffff2a; background: #0004; color: inherit; font: inherit; font-size: 17px; }
+
+.game-card.missing .cover { filter: grayscale(1) brightness(.6); }
+.game-card.missing small { color: #f5b94a; }
+#screen-msg .btn { margin: 10px 0; }
