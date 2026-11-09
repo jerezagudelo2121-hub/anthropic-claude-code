@@ -666,14 +666,15 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 .game-card.missing small { color: #f5b94a; }
 #screen-msg .btn { margin: 10px 0; }
 
-/* ---------- Juego a pantalla llena ----------
- * La imagen ocupa todo el hueco libre (se estira; sin bandas). En vertical el mando se queda
- * con la altura justa y el resto es para el juego. */
-body.stretch .screen-wrap { flex: 1 1 auto; min-height: 0; }
-body.stretch .screen, body.stretch.snes .screen { aspect-ratio: auto; width: 100%; height: 100%; max-width: none; border-radius: 0; }
-body.stretch .pad { flex: 0 0 min(40dvh, 270px); min-height: 0; }
-body.stretch.pad-hidden .screen-wrap { flex: 1 1 auto; }
+/* ---------- Juego ampliado (sin deformar) ----------
+ * En vertical el juego ya ocupa todo el ancho: para verlo más grande sin estirarlo se amplía
+ * un 12 % y se recorta lo que sobra por los lados (unos pocos píxeles). En horizontal no hace
+ * falta: la imagen ya ocupa toda la altura. */
+body.stretch .screen { aspect-ratio: auto; width: 100%; max-width: none; height: calc(100vw / 1.5 * 1.12); }
+body.stretch.snes .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 3 / 4 * 1.12); }
+body.stretch #game, body.stretch #remote-video { left: -6%; right: auto; width: 112%; }
 @media (orientation: landscape) and (max-height: 600px) {
-  body.stretch .screen, body.stretch.snes .screen { width: 100vw; height: 100%; }
-  body.stretch .pad { flex: none; }
+  body.stretch .screen { width: auto; height: 100%; max-width: 100vw; aspect-ratio: 3 / 2; }
+  body.stretch.snes .screen { width: auto; height: 100%; max-width: 100vw; aspect-ratio: 4 / 3; }
+  body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
 }
