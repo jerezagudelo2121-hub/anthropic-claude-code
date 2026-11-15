@@ -2,11 +2,40 @@
 
 /* GBA Web: interfaz para iPhone sobre gpSP (WebAssembly) + multijugador por WebRTC. */
 
-const CORES = { gba: "gpsp/gpsp.wasm", snes: "snes/snes9x.wasm" };
-const SNES_EXT = /\.(sfc|smc|swc|fig)$/i;
-const systemOf = (name) => (SNES_EXT.test(name || "") ? "snes" : "gba");
+/* Consolas: núcleo, extensiones, proporción de la imagen y nombres de los botones.
+ *   ar: "43" (4:3), "109" (10:9) o vacío (3:2, la GBA). xy: rombo X/Y/A/B. nolr: sin L/R.
+ *   labels: texto de cada botón táctil (los bits son los del mando RetroPad). */
+const SYSTEMS = {
+  gba: { name: "Game Boy Advance", tag: "GBA", core: "gpsp/gpsp.wasm", ext: /\.(gba|agb|bin)$/i, aspect: 3 / 2 },
+  snes: { name: "Super Nintendo", tag: "SNES", core: "snes/snes9x.wasm", ext: /\.(sfc|smc|swc|fig)$/i, aspect: 4 / 3, ar: "43", xy: true },
+  nes: { name: "NES", tag: "NES", core: "cores/nes.wasm", ext: /\.(nes|fds|unf|unif)$/i, aspect: 4 / 3, ar: "43", nolr: true },
+  gb: { name: "Game Boy", tag: "GB", core: "cores/gb.wasm", ext: /\.gb$/i, aspect: 10 / 9, ar: "109", nolr: true },
+  gbc: { name: "Game Boy Color", tag: "GBC", core: "cores/gb.wasm", ext: /\.(gbc|sgb)$/i, aspect: 10 / 9, ar: "109", nolr: true },
+  md: { name: "Mega Drive", tag: "MD", core: "cores/md.wasm", ext: /\.(md|smd|gen|68k)$/i, aspect: 4 / 3, ar: "43", xy: true,
+    labels: { Y: "A", B: "B", A: "C", X: "Y", L: "X", R: "Z", SELECT: "MODE" } },
+  sms: { name: "Master System", tag: "SMS", core: "cores/md.wasm", ext: /\.(sms|sg)$/i, aspect: 4 / 3, ar: "43", nolr: true, labels: { B: "1", A: "2" } },
+  gg: { name: "Game Gear", tag: "GG", core: "cores/md.wasm", ext: /\.gg$/i, aspect: 10 / 9, ar: "109", nolr: true, labels: { B: "1", A: "2" } },
+};
+const ROM_EXT = /\.(gba|agb|bin|sfc|smc|swc|fig|nes|fds|unf|unif|gb|gbc|sgb|md|smd|gen|68k|sms|sg|gg)$/i;
+const systemOf = (name) => Object.keys(SYSTEMS).find((k) => SYSTEMS[k].ext.test(name || "")) || "gba";
+
+// Clases de la página según la consola: forma de la pantalla y botones del mando.
+function applySystemLook(sys) {
+  const def = SYSTEMS[sys] || SYSTEMS.gba;
+  const b = document.body.classList;
+  b.toggle("snes", sys !== "gba");             // "snes" = cualquier consola que no es la GBA (legado)
+  b.toggle("ar43", def.ar === "43");
+  b.toggle("ar109", def.ar === "109");
+  b.toggle("xy", !!def.xy);
+  b.toggle("nolr", !!def.nolr);
+  const labels = { A: "A", B: "B", X: "X", Y: "Y", L: "L", R: "R", SELECT: "SELECT", START: "START", ...(def.labels || {}) };
+  for (const el of document.querySelectorAll("#pad [data-btn]")) {
+    if (labels[el.dataset.btn]) el.textContent = labels[el.dataset.btn];
+  }
+  $(".bz-snes").innerHTML = sys === "gba" ? "" : `PIXEL<em>${def.tag}</em>`;
+}
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.12";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.15";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -216,7 +245,7 @@ function renderLibrary() {
       cover.textContent = title.replace(/^pok[eé]mon\s*/i, "").slice(0, 2).toUpperCase() || "GBA";
     }
     cover.className = "cover";
-    const snes = (rom.system || systemOf(rom.name)) === "snes";
+    const sysId = rom.system || systemOf(rom.name);
     const info = document.createElement("div");
     info.className = "meta-info";
     info.innerHTML = "<b></b><small></small>";
@@ -231,10 +260,10 @@ function renderLibrary() {
       openGameSheet(rom);
     };
     card.append(cover, info, more);
-    if (snes) {
+    if (sysId !== "gba" && SYSTEMS[sysId]) {
       const tag = document.createElement("span");
       tag.className = "sys-tag";
-      tag.textContent = "SNES";
+      tag.textContent = SYSTEMS[sysId].tag;
       card.appendChild(tag);
     }
     card.onclick = () => (rom.missing ? relinkRom(rom) : playRom(rom));
@@ -335,6 +364,43 @@ function askText(title, value = "", okLabel = "Aceptar", maxLength = 30) {
     sheet.onclick = (e) => { if (e.target === sheet) done(null); };
   });
 }
+
+/* Aplicar un parche (traducción, mejora o hack) a un juego de la biblioteca: se guarda como un
+ * juego nuevo con el parche aplicado, con sus propias partidas; el original se queda igual. */
+let patchRom = null;
+$("#patch-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  const rom = patchRom;
+  patchRom = null;
+  if (!file || !rom) return;
+  try {
+    let patch = new Uint8Array(await file.arrayBuffer());
+    let patchName = file.name;
+    if (patch[0] === 0x50 && patch[1] === 0x4b) {
+      const files = fflate.unzipSync(patch, { filter: (f) => /\.(ips|ups|bps)$/i.test(f.name) });
+      const entry = Object.keys(files)[0];
+      if (!entry) throw new Error("el .zip no contiene ningún parche (.ips, .ups o .bps)");
+      patch = files[entry];
+      patchName = entry.split("/").pop();
+    }
+    const base = await readRom(new File([rom.data], rom.name));
+    const { data, format, warning } = RomPatch.applyPatch(base.data, patch);
+    const ext = (/\.[a-z0-9]+$/i.exec(base.name) || [".bin"])[0];
+    const label = patchName.replace(/\.(ips|ups|bps)$/i, "");
+    const name = `${baseName(base.name)} [${label}]${ext}`;
+    const old = library.find((r) => r.name === name);
+    await db.put("roms", { ...old, name, title: `${romTitle(rom)} (${label})`, data, size: data.length, missing: false, system: base.system, added: (old && old.added) || Date.now() });
+    $("#game-sheet").hidden = true;
+    await loadLibrary();
+    toast(warning
+      ? `⚠️ Parche ${format} aplicado, pero parece hecho para otra versión de la ROM: si el juego falla, busca la versión que pide el parche.`
+      : `✅ Parche ${format} aplicado: «${romTitle(rom)} (${label})» está en tu biblioteca.`, 7000);
+  } catch (err) {
+    console.error(err);
+    toast("No se pudo aplicar el parche: " + err.message, 6000);
+  }
+});
 
 let savesRom = null;
 
@@ -447,6 +513,9 @@ $("#game-sheet").addEventListener("click", async (e) => {
     case "saves":
       $("#game-sheet").hidden = true;
       return openSaves(rom);
+    case "patch":
+      patchRom = rom;
+      return $("#patch-input").click();
     case "rename": {
       const title = await askText("✏️ Nombre del juego", romTitle(rom), "Guardar", 60);
       if (!title || !title.trim()) return;
@@ -526,7 +595,7 @@ $("#join-form").addEventListener("submit", (e) => {
 /* ---------- Arrancar el juego ---------- */
 
 let engine = null;
-let system = "gba";   // "gba" | "snes"
+let system = "gba";   // clave de SYSTEMS
 let romName = "";
 let saveKey = "";     // clave del guardado de la partida en curso
 let lastSave = null;
@@ -537,9 +606,9 @@ async function readRom(file) {
   let data = new Uint8Array(await file.arrayBuffer());
   let name = file.name;
   if (data[0] === 0x50 && data[1] === 0x4b) { // .zip
-    const files = fflate.unzipSync(data, { filter: (f) => /\.(gba|agb|bin|sfc|smc|swc|fig)$/i.test(f.name) });
+    const files = fflate.unzipSync(data, { filter: (f) => ROM_EXT.test(f.name) });
     const entry = Object.keys(files)[0];
-    if (!entry) throw new Error("El .zip no contiene ningún juego (.gba, .sfc o .smc)");
+    if (!entry) throw new Error("El .zip no contiene ningún juego que el emulador conozca");
     data = files[entry];
     name = entry.split("/").pop();
   }
@@ -556,7 +625,7 @@ async function startGame(file, record, pid) {
     romName = baseName(rom.name);
     libraryName = file.name;
     system = rom.system;
-    document.body.classList.toggle("snes", system === "snes");
+    applySystemLook(system);
     if (!record) record = await safeGet("roms", file.name);
     const part = record ? (partidas(record).find((p) => p.id === pid) || currentPartida(record)) : { id: "1", name: "Partida 1" };
     saveKey = record ? saveKeyFor(record, part.id) : romName;
@@ -566,9 +635,11 @@ async function startGame(file, record, pid) {
       updateRom(libraryName, { lastPlayed: Date.now(), saves, current: part.id, system });
     }
     const bios = system === "gba" ? await safeGet("files", "bios") : null;
-    engine = await GbaEngine.create(CORES[system], $("#game"), system);
+    engine = await GbaEngine.create(SYSTEMS[system].core, $("#game"), system);
+    engine.aspect = SYSTEMS[system].aspect;
     applyGraphics();
-    if (!engine.load(rom.data, bios)) throw new Error("El emulador no pudo abrir este juego.");
+    const ext = (/\.[a-z0-9]+$/i.exec(rom.name) || [".bin"])[0].toLowerCase();
+    if (!engine.load(rom.data, bios, "/rom" + ext)) throw new Error("El emulador no pudo abrir este juego.");
     const saved = await safeGet("saves", saveKey);
     if (saved) engine.setSave(saved);
     lastSave = engine.getSave();
@@ -773,7 +844,7 @@ function linkActive() {
 
 // Modo de la sala "Jugar juntos": cable link (GBA) o dos mandos sincronizados (Super Nintendo).
 const isRoomMode = (mode) => mode === "link" || mode === "sync";
-const roomMode = () => (system === "snes" ? "sync" : "link");
+const roomMode = () => (system === "gba" ? "link" : "sync");
 
 function ffAllowed() {
   return !net.role;
@@ -1136,14 +1207,15 @@ function enterPreview(sys) {
   if (engine) return toast("Sal del juego para usar la vista previa");
   closeSettings();
   document.body.classList.add("preview");
-  document.body.classList.toggle("snes", sys === "snes");
+  applySystemLook(sys);
   $("#game-title").textContent = "Vista previa";
   screenMsg("");
   showView("console");
   toast("Toca ☰ para ajustar. Se ve el cambio al momento.", 4000);
 }
 function exitPreview() {
-  document.body.classList.remove("preview", "snes");
+  document.body.classList.remove("preview");
+  applySystemLook("gba");
   closeSettings();
   showView("home");
 }

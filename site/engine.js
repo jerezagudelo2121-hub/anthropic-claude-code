@@ -1,7 +1,11 @@
 "use strict";
 
-/* Motor: ejecuta el núcleo (gpSP para GBA, snes9x para Super Nintendo) en WebAssembly
+/* Motor: ejecuta el núcleo (gpSP para GBA, snes9x para Super Nintendo, FCEUmm para NES,
+ * SameBoy para Game Boy y Genesis Plus GX para Mega Drive/Master System/Game Gear) en WebAssembly
  * y se encarga de imagen, sonido y ritmo. */
+
+const MATH1 = [Math.sin, Math.cos, Math.tan, Math.atan, Math.asin, Math.acos, Math.exp, Math.log, Math.log10, Math.round, Math.trunc];
+const MATH2 = [Math.pow, Math.atan2, (a, b) => a % b];
 
 class GbaEngine {
   static async create(wasmUrl, canvas, system = "gba") {
@@ -55,6 +59,8 @@ class GbaEngine {
         if (this.onNetSend) this.onNetSend(this.bytes(p, n).slice(), client);
       },
       js_net_poll: () => this.deliverPackets(),
+      js_math1: (op, x) => MATH1[op](x),
+      js_math2: (op, a, b) => MATH2[op](a, b),
     };
     const response = await fetch(url);
     if (!response.ok) throw new Error("No se pudo descargar el núcleo (" + response.status + ")");
@@ -89,10 +95,12 @@ class GbaEngine {
     this.ex.fe_register_file(this.cstr(path), this.copyIn(data), data.length);
   }
 
-  load(rom, bios) {
-    if (this.system === "snes") {
-      const ptr = this.copyIn(rom); // el núcleo usa la ROM directamente desde la memoria
-      if (!this.ex.fe_load_mem(ptr, rom.length)) return false;
+  load(rom, bios, path = "/rom.bin") {
+    if (this.system !== "gba") {
+      // El núcleo usa la ROM desde la memoria; algunos la piden como archivo (se registra igual).
+      const ptr = this.copyIn(rom);
+      if (this.ex.fe_register_file) this.ex.fe_register_file(this.cstr(path), ptr, rom.length);
+      if (!this.ex.fe_load_mem(ptr, rom.length, this.cstr(path))) return false;
       this.fps = this.ex.fe_fps();
       this.sampleRate = this.ex.fe_sample_rate();
       return true;
@@ -192,18 +200,19 @@ class GbaEngine {
   snapshot() {
     const c = this.snapCanvas || (this.snapCanvas = document.createElement("canvas"));
     const img = new ImageData(this.rgba.slice(), this.w, this.h);
-    if (this.system !== "snes") {
+    if (this.system === "gba") {
       c.width = this.w;
       c.height = this.h;
       c.getContext("2d").putImageData(img, 0, 0);
       return c;
     }
-    // Super Nintendo: se recorta a 3:2 para que encaje con las portadas.
+    // Otras consolas: se recorta a 3:2 (según su proporción real) para que encaje con las portadas.
     const tmp = Object.assign(document.createElement("canvas"), { width: this.w, height: this.h });
     tmp.getContext("2d").putImageData(img, 0, 0);
     c.width = 288;
     c.height = 192;
-    const cropH = Math.round(this.h * 8 / 9); // se ve a 4:3; para 3:2 sobra 1/9 de alto
+    const aspect = this.aspect || 4 / 3;
+    const cropH = Math.round(this.h * Math.min(1, aspect / 1.5));
     const sy = Math.max(0, (this.h - cropH) / 2);
     c.getContext("2d").drawImage(tmp, 0, sy, this.w, cropH, 0, 0, 288, 192);
     return c;
@@ -223,7 +232,8 @@ class GbaEngine {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     const ctx = this.audioCtx = new AC();
-    this.ring = new Float32Array(16384 * 2);
+    // Búfer de ~0,35 s (algunos núcleos sacan el sonido a muchas muestras por segundo).
+    this.ring = new Float32Array(Math.max(16384, Math.ceil((this.sampleRate || 32768) * 0.35)) * 2);
     this.ringRead = 0;
     this.ringWrite = 0;
     this.resamplePos = 0;

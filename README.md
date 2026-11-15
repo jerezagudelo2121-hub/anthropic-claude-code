@@ -20,6 +20,12 @@ Incluye **multijugador online** para jugar con un amigo.
 - **Partidas guardadas automáticas** (las del propio juego) cada 5 s y al salir de Safari.
 - **3 ranuras de guardado rápido** (save states), silenciar, reiniciar.
 - **Velocidad x1, x2, x3, x4 y x8** desde el menú, o manteniendo ⏩ (x4). Se desactiva en multijugador.
+- **Más consolas**: NES (`.nes`), Game Boy y Game Boy Color (`.gb`, `.gbc`), Mega Drive (`.md`, `.gen`,
+  `.bin`), Master System (`.sms`) y Game Gear (`.gg`), cada una con su proporción de pantalla y sus botones
+  (Mega Drive: A, B, C, X, Y, Z y MODE). En NES y Mega Drive también hay **online a dos mandos**.
+- **🩹 Aplicar parche** (⋯ del juego): traducciones al español, mejoras o hacks en `.ips`, `.ups` o `.bps`
+  (también dentro de un `.zip`). Crea una copia del juego parcheada; avisa si el parche es para otra versión.
+- **🤝 Juegos para jugar juntos**: lista en el inicio de juegos con cable link o dos mandos a la vez.
 - **⚙️ Ajustes desde el inicio** (sin abrir un juego): gráficos, pantalla y botones con **vista previa**,
   diseño, sonido (volumen), controles (velocidad del ⏩, ocultar mando, vibración), **copia de seguridad
   de todas las partidas** en un `.zip` (exportar e importar), BIOS, conexión y versión.
@@ -154,6 +160,9 @@ Para probarlo en local: `cd site && python3 -m http.server 8000` y abre http://l
   `wasm/frontend_snes.c` (dos mandos). Online a dos mandos: modo "sync" en `app.js` (se envían
   los botones con 4 fotogramas de margen y cada ~2 s se compara una huella de la memoria).
 
+- `site/cores/*.wasm` — NES (FCEUmm), Game Boy (SameBoy) y Mega Drive (Genesis Plus GX), compilados
+  con `wasm/build_core.sh nes|gb|md` y el frontend genérico `wasm/frontend_core.c`.
+
 Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan `clang`, `wasm-ld`, `git` y `python3`).
 
 ## Si el multijugador no conecta
@@ -178,6 +187,10 @@ Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan 
   `site/gpsp/gpsp.wasm`. Licencia en `site/gpsp/COPYING`; el código fuente se obtiene con `wasm/build.sh`.
 - [snes9x2005](https://github.com/libretro/snes9x2005) (licencia de Snes9x, uso no comercial),
   commit `a79dfe9`, compilado en `site/snes/snes9x.wasm`. Licencia en `site/snes/COPYRIGHT`.
+- [FCEUmm](https://github.com/libretro/libretro-fceumm) (GPL-2.0), commit `3338664` — `site/cores/nes.wasm`.
+- [SameBoy](https://github.com/libretro/SameBoy) (MIT, con sus boot ROMs libres), commit `aa158a8` — `site/cores/gb.wasm`.
+- [Genesis Plus GX](https://github.com/libretro/Genesis-Plus-GX) (licencia propia, uso no comercial), commit
+  `b9c2316` — `site/cores/md.wasm`. Las licencias están junto a cada núcleo en `site/cores/`.
 - [PeerJS](https://peerjs.com) 1.5.5 (MIT) — `site/vendor/peerjs`
 - [fflate](https://github.com/101arrowz/fflate) 0.8.2 (MIT) — `site/vendor/fflate`, para abrir ROMs `.zip`.
 

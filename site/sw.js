@@ -4,7 +4,7 @@
  * Estrategia "red primero": si hay conexión se usa siempre la versión nueva y se guarda una
  * copia; sin conexión se sirve la copia guardada. Así nunca se mezclan versiones antiguas. */
 
-const CACHE = "gbaweb-v3";
+const CACHE = "gbaweb-v4";
 const CORE = [
   "./",
   "index.html",
@@ -12,6 +12,7 @@ const CORE = [
   "app.js",
   "engine.js",
   "renderer.js",
+  "patch.js",
   "gpsp/gpsp.wasm",
   "snes/snes9x.wasm",
   "vendor/peerjs/peerjs.min.js",

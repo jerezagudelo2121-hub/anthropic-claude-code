@@ -284,18 +284,18 @@ body.guest .turbo { display: none; }
 
 /* Super Nintendo: pantalla 4:3 y botones X, Y, B, A en rombo */
 .face.x, .face.y { display: none; }
-body.snes .screen { aspect-ratio: 4 / 3; max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px) * 4 / 3); }
-body.snes.pad-hidden .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px) * 4 / 3); }
-body.snes .ab { --s: min(15vw, 60px); width: calc(var(--s) * 2.7); height: calc(var(--s) * 2.7); top: calc(50% - var(--s) * 1.35 + 10px); }
-body.snes .ab::before { left: 0; right: 0; top: 0; bottom: 0; border-radius: 50%; transform: none; }
-body.snes .face { position: absolute; font-size: 20px; }
-body.snes .face.x, body.snes .face.y { display: flex; }
-body.snes .face.x { left: calc(50% - var(--s) / 2); top: 0; }
-body.snes .face.b { left: calc(50% - var(--s) / 2); bottom: 0; }
-body.snes .face.y { left: 0; top: calc(50% - var(--s) / 2); }
-body.snes .face.a { right: 0; top: calc(50% - var(--s) / 2); }
-body.snes .face.x, body.snes .face.y { --hl: var(--b-hl); --c1: var(--b-1); --c2: var(--b-2); --sh: var(--b-sh); color: var(--b-text); }
-body.snes .face.x { --hl: var(--a-hl); --c1: var(--a-1); --c2: var(--a-2); --sh: var(--a-sh); color: var(--a-text); }
+body.ar43 .screen { aspect-ratio: 4 / 3; max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px) * 4 / 3); }
+body.ar43.pad-hidden .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px) * 4 / 3); }
+body.xy .ab { --s: min(15vw, 60px); width: calc(var(--s) * 2.7); height: calc(var(--s) * 2.7); top: calc(50% - var(--s) * 1.35 + 10px); }
+body.xy .ab::before { left: 0; right: 0; top: 0; bottom: 0; border-radius: 50%; transform: none; }
+body.xy .face { position: absolute; font-size: 20px; }
+body.xy .face.x, body.xy .face.y { display: flex; }
+body.xy .face.x { left: calc(50% - var(--s) / 2); top: 0; }
+body.xy .face.b { left: calc(50% - var(--s) / 2); bottom: 0; }
+body.xy .face.y { left: 0; top: calc(50% - var(--s) / 2); }
+body.xy .face.a { right: 0; top: calc(50% - var(--s) / 2); }
+body.xy .face.x, body.xy .face.y { --hl: var(--b-hl); --c1: var(--b-1); --c2: var(--b-2); --sh: var(--b-sh); color: var(--b-text); }
+body.xy .face.x { --hl: var(--a-hl); --c1: var(--a-1); --c2: var(--a-2); --sh: var(--a-sh); color: var(--a-text); }
 .sys-tag {
   position: absolute; top: 8px; left: 8px; padding: 2px 7px; border-radius: 8px;
   background: #000a; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 1px;
@@ -548,7 +548,7 @@ body.frame .screen {
   max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px - 64px) * 1.5);
   box-shadow: 0 0 0 2px #0009, 0 0 0 4px #ffffff0d;
 }
-body.frame.snes .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px - 64px) * 4 / 3); }
+body.frame.ar43 .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px - 64px) * 4 / 3); }
 body.frame .bezel-label {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   height: 24px; padding: 0 4px; color: #b9b9c8; font-size: 9px; letter-spacing: 1.5px; font-weight: 800;
@@ -578,7 +578,7 @@ body.frame.pad-hidden .screen { max-width: calc((100dvh - var(--safe-t) - var(--
 @media (orientation: landscape) and (max-height: 600px) {
   body.frame .screen-wrap { margin: 0; padding: 0; border-radius: 0; background: none; box-shadow: none; }
   body.frame .bezel-label, body.frame .pad::after { display: none; }
-  body.frame .screen, body.frame.snes .screen { max-width: 100vw; border-radius: 0; box-shadow: 0 0 60px #000c; }
+  body.frame .screen, body.frame.ar43 .screen { max-width: 100vw; border-radius: 0; box-shadow: 0 0 60px #000c; }
 }
 
 /* Fondo elegido (preset o foto): se oscurece un poco para que el mando se vea bien */
@@ -646,8 +646,8 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
 #saves-sheet { z-index: 12; }
 
 @media (orientation: landscape) and (max-height: 600px) {
-  body.snes .ab { --s: min(6.5vw, 15vh, 58px); top: auto; bottom: 12%; }
-  body.snes .screen { max-width: 100vw; }
+  body.xy .ab { --s: min(6.5vw, 15vh, 58px); top: auto; bottom: 12%; }
+  body.ar43 .screen { max-width: 100vw; }
 }
 
 /* Retransmisión propia (TURN) */
@@ -670,7 +670,7 @@ button, a, label, .btn, .game-card, .shader-btn, .skin-btn, .bg-btn { touch-acti
  * --zoom (1–1,3, se elige en el menú): la imagen se amplía manteniendo su proporción y se
  * recorta lo que sobra por los lados. En horizontal no se aplica. */
 body.stretch .screen { aspect-ratio: auto; width: 100%; max-width: none; height: calc(100vw / 1.5 * var(--zoom, 1)); }
-body.stretch.snes .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 3 / 4 * var(--zoom, 1)); }
+body.stretch.ar43 .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 3 / 4 * var(--zoom, 1)); }
 body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1)) * 50%); right: auto; width: calc(var(--zoom, 1) * 100%); }
 @media (orientation: landscape) and (max-height: 600px) {
   body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
@@ -679,7 +679,7 @@ body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1))
 @media (orientation: portrait), (min-height: 601px) {
   .dpad { --s: calc(min(42vw, 180px) * var(--btn, 1)); }
   .ab { --s: calc(min(19vw, 78px) * var(--btn, 1)); }
-  body.snes .ab { --s: calc(min(15vw, 60px) * var(--btn, 1)); }
+  body.xy .ab { --s: calc(min(15vw, 60px) * var(--btn, 1)); }
 }
 
 /* Barras de ajuste del menú */
@@ -698,9 +698,9 @@ body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1))
     height: auto; max-width: none; aspect-ratio: 3 / 2;
     width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 3 / 2));
   }
-  body.snes #console #screen { aspect-ratio: 4 / 3; width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 4 / 3)); }
+  body.ar43 #console #screen { aspect-ratio: 4 / 3; width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 4 / 3)); }
   body.pad-hidden #console #screen { width: min(100vw, calc(100dvh * 3 / 2)); }
-  body.pad-hidden.snes #console #screen { width: min(100vw, calc(100dvh * 4 / 3)); }
+  body.pad-hidden.ar43 #console #screen { width: min(100vw, calc(100dvh * 4 / 3)); }
   body.stretch #game, body.stretch #remote-video { left: 0; width: 100%; }
   /* Mando dentro de las columnas laterales, sin transparencia */
   .pad .key, .pad .face, .dpad { opacity: 1; }
@@ -709,7 +709,7 @@ body.stretch #game, body.stretch #remote-video { left: calc((1 - var(--zoom, 1))
   .shoulder.r { right: calc(10px + var(--safe-r)); }
   .dpad { --s: min(calc(var(--side) - 26px), 42vh); left: calc(13px + var(--safe-l)); bottom: 15%; }
   .ab { --s: min(calc((var(--side) - 24px) / 2.3), 19vh); right: calc(12px + var(--safe-r)); bottom: 18%; }
-  body.snes .ab { --s: min(calc((var(--side) - 24px) / 2.7), 15vh); bottom: 15%; }
+  body.xy .ab { --s: min(calc((var(--side) - 24px) / 2.7), 15vh); bottom: 15%; }
   .meta { right: calc(10px + var(--safe-r)); gap: 6px; }
   .meta .pill { width: calc((var(--side) - 26px) / 2); }
   .turbo { left: calc(10px + var(--safe-l)); }
@@ -740,3 +740,21 @@ body.stretch.preview .preview-art { left: calc((1 - var(--zoom, 1)) * 50%); righ
 @media (orientation: landscape) and (max-height: 600px) {
   body.stretch.preview .preview-art { left: 0; width: 100%; }
 }
+
+/* Game Boy y Game Gear: pantalla 10:9 (mismas reglas que las de 4:3) */
+body.ar109 .screen { aspect-ratio: 10 / 9; max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px) * 10 / 9); }
+body.ar109.pad-hidden .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px) * 10 / 9); }
+body.frame.ar109 .screen { max-width: calc((100dvh - var(--safe-t) - var(--safe-b) - 44px - 270px - 64px) * 10 / 9); }
+body.stretch.ar109 .screen { aspect-ratio: auto; max-width: none; height: calc(100vw * 9 / 10 * var(--zoom, 1)); }
+@media (orientation: landscape) and (max-height: 600px) {
+  body.frame .screen, body.frame.ar109 .screen { max-width: 100vw; border-radius: 0; box-shadow: 0 0 60px #000c; }
+  body.ar109 .screen { max-width: 100vw; }
+  body.ar109 #console #screen { aspect-ratio: 10 / 9; width: min(calc(100vw - 2 * var(--side) - var(--safe-l) - var(--safe-r)), calc(100dvh * 10 / 9)); }
+  body.pad-hidden.ar109 #console #screen { width: min(100vw, calc(100dvh * 10 / 9)); }
+}
+
+/* Consolas sin gatillos L/R (NES, Game Boy, Master System, Game Gear) */
+body.nolr .shoulder { display: none; }
+
+.coop h4 { margin: 12px 0 2px; font-size: 14px; }
+.coop p { margin: 4px 0; }
