@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -459,3 +460,168 @@ int64_t filestream_seek(RFILE *f, int64_t offset, int whence) {
 
 int64_t filestream_get_size(RFILE *f) { return f->size; }
 int filestream_close(RFILE *f) { free(f); return 0; }
+
+/* stat/mkdir mínimos: solo conocen los archivos registrados en memoria. */
+#include <sys/stat.h>
+int stat(const char *path, struct stat *st) {
+  for (int i = 0; i < MAX_FILES; i++) {
+    if (files[i].data && !strcmp(files[i].path, path)) {
+      if (st) { st->st_size = files[i].size; st->st_mode = S_IFREG; st->st_mtime = 0; }
+      return 0;
+    }
+  }
+  return -1;
+}
+int mkdir(const char *path, unsigned mode) { (void)path; (void)mode; return -1; }
+
+/* ---------- Matemáticas: se piden a JavaScript (Math.*) ---------- */
+IMPORT(js_math1) double js_math1(int op, double x);
+IMPORT(js_math2) double js_math2(int op, double a, double b);
+double sin(double x) { return js_math1(0, x); }
+double cos(double x) { return js_math1(1, x); }
+double tan(double x) { return js_math1(2, x); }
+double atan(double x) { return js_math1(3, x); }
+double asin(double x) { return js_math1(4, x); }
+double acos(double x) { return js_math1(5, x); }
+double exp(double x) { return js_math1(6, x); }
+double log(double x) { return js_math1(7, x); }
+double log10(double x) { return js_math1(8, x); }
+double round(double x) { return js_math1(9, x); }
+double trunc(double x) { return js_math1(10, x); }
+double pow(double a, double b) { return js_math2(0, a, b); }
+double atan2(double y, double x) { return js_math2(1, y, x); }
+double fmod(double a, double b) { return js_math2(2, a, b); }
+float sinf(float x) { return (float)sin(x); }
+float cosf(float x) { return (float)cos(x); }
+float powf(float a, float b) { return (float)pow(a, b); }
+float expf(float x) { return (float)exp(x); }
+float logf(float x) { return (float)log(x); }
+float roundf(float x) { return (float)round(x); }
+
+/* strtod/atof sencillos (signo, decimales y exponente). */
+double strtod(const char *s, char **end) {
+  const char *p = s;
+  while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+  int neg = 0;
+  if (*p == '-' || *p == '+') neg = *p++ == '-';
+  double v = 0, scale = 1;
+  int any = 0;
+  while (*p >= '0' && *p <= '9') { v = v * 10 + (*p++ - '0'); any = 1; }
+  if (*p == '.') { p++; while (*p >= '0' && *p <= '9') { v = v * 10 + (*p++ - '0'); scale *= 10; any = 1; } }
+  v /= scale;
+  if (any && (*p == 'e' || *p == 'E')) {
+    const char *q = p + 1;
+    int eneg = 0, e = 0;
+    if (*q == '-' || *q == '+') eneg = *q++ == '-';
+    if (*q >= '0' && *q <= '9') {
+      while (*q >= '0' && *q <= '9') e = e * 10 + (*q++ - '0');
+      v *= pow(10, eneg ? -e : e);
+      p = q;
+    }
+  }
+  if (end) *end = (char *)(any ? p : s);
+  return neg ? -v : v;
+}
+double atof(const char *s) { return strtod(s, 0); }
+
+/* ---------- Rutas: solo los archivos en memoria ---------- */
+int64_t filestream_tell(RFILE *f) { return f->pos; }
+bool path_is_valid(const char *path) { struct stat st; return stat(path, &st) == 0; }
+void path_vfs_init(const struct retro_vfs_interface_info *info) { (void)info; }
+size_t fill_pathname_join(char *out, const char *dir, const char *path, size_t size) {
+  size_t n = 0;
+  if (dir && *dir) {
+    while (dir[n] && n + 1 < size) { out[n] = dir[n]; n++; }
+    if (n && out[n - 1] != '/' && n + 1 < size) out[n++] = '/';
+  }
+  for (size_t i = 0; path[i] && n + 1 < size; i++) out[n++] = path[i];
+  if (size) out[n] = 0;
+  return n;
+}
+
+/* ---------- FILE mínimo: lee los archivos en memoria; escribir no guarda nada ---------- */
+struct _FILE { const uint8_t *data; int64_t size, pos; int writing; };
+FILE *fopen(const char *path, const char *mode) {
+  if (mode && (mode[0] == 'w' || mode[0] == 'a')) {
+    FILE *f = calloc(1, sizeof(FILE));
+    f->writing = 1;
+    return f;
+  }
+  for (int i = 0; i < MAX_FILES; i++) {
+    if (files[i].data && !strcmp(files[i].path, path)) {
+      FILE *f = calloc(1, sizeof(FILE));
+      f->data = files[i].data;
+      f->size = files[i].size;
+      return f;
+    }
+  }
+  return NULL;
+}
+size_t fread(void *buf, size_t size, size_t n, FILE *f) {
+  if (!f || !size) return 0;
+  int64_t want = (int64_t)size * n, left = f->size - f->pos;
+  if (want > left) want = left - left % size;
+  if (want <= 0) return 0;
+  memcpy(buf, f->data + f->pos, (size_t)want);
+  f->pos += want;
+  return (size_t)(want / size);
+}
+size_t fwrite(const void *buf, size_t size, size_t n, FILE *f) {
+  if (f == stdout || f == stderr || !f) { js_log(buf, size * n); return n; }
+  f->pos += (int64_t)size * n;
+  if (f->pos > f->size) f->size = f->pos;
+  return n;
+}
+int fseek(FILE *f, long off, int whence) {
+  if (!f) return -1;
+  f->pos = whence == SEEK_SET ? off : whence == SEEK_CUR ? f->pos + off : f->size + off;
+  return 0;
+}
+long ftell(FILE *f) { return f ? (long)f->pos : -1; }
+int fclose(FILE *f) { free(f); return 0; }
+int feof(FILE *f) { return !f || f->pos >= f->size; }
+int fgetc(FILE *f) { return f && f->pos < f->size ? f->data[f->pos++] : EOF; }
+
+int vasprintf(char **out, const char *fmt, va_list ap) {
+  va_list cp;
+  va_copy(cp, ap);
+  int n = vsnprintf(NULL, 0, fmt, cp);
+  va_end(cp);
+  if (n < 0 || !(*out = malloc(n + 1))) return -1;
+  return vsnprintf(*out, n + 1, fmt, ap);
+}
+int asprintf(char **out, const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  int r = vasprintf(out, fmt, ap);
+  va_end(ap);
+  return r;
+}
+
+int64_t filestream_read_file(const char *path, void **buf, int64_t *len) {
+  for (int i = 0; i < MAX_FILES; i++) {
+    if (files[i].data && !strcmp(files[i].path, path)) {
+      uint8_t *b = malloc(files[i].size + 1);
+      memcpy(b, files[i].data, files[i].size);
+      b[files[i].size] = 0;
+      *buf = b;
+      if (len) *len = files[i].size;
+      return 1;
+    }
+  }
+  *buf = NULL;
+  if (len) *len = 0;
+  return 0;
+}
+
+char *filestream_gets(RFILE *f, char *s, size_t len) {
+  if (!f || !len || f->pos >= f->size) return NULL;
+  size_t i = 0;
+  while (i + 1 < len && f->pos < f->size) {
+    char c = (char)f->data[f->pos++];
+    s[i++] = c;
+    if (c == '\n') break;
+  }
+  s[i] = 0;
+  return s;
+}

@@ -1,4 +1,5 @@
 #pragma once
+#include <sys/types.h>
 #include <stddef.h>
 #include <stdarg.h>
 typedef struct _FILE FILE;
@@ -17,3 +18,13 @@ int vsprintf(char *buf, const char *fmt, va_list ap);
 int puts(const char *s);
 int sscanf(const char *s, const char *fmt, ...);
 int fflush(FILE *f);
+FILE *fopen(const char *path, const char *mode);
+size_t fread(void *buf, size_t size, size_t n, FILE *f);
+size_t fwrite(const void *buf, size_t size, size_t n, FILE *f);
+int fseek(FILE *f, long off, int whence);
+long ftell(FILE *f);
+int fclose(FILE *f);
+int feof(FILE *f);
+int fgetc(FILE *f);
+int vasprintf(char **out, const char *fmt, va_list ap);
+int asprintf(char **out, const char *fmt, ...);

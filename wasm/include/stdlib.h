@@ -16,3 +16,5 @@ int rand(void);
 void srand(unsigned s);
 #define RAND_MAX 0x7fffffff
 char *getenv(const char *name);
+double strtod(const char *s, char **end);
+double atof(const char *s);

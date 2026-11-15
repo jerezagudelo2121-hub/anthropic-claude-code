@@ -23,7 +23,7 @@
 <section id="home" class="view">
   <div class="home-card">
     <div class="logo">GBA<span>web</span></div>
-    <p class="tagline">Game Boy Advance y Super Nintendo en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
+    <p class="tagline">GBA, Super Nintendo, NES, Game Boy, Mega Drive y más en tu navegador.<br>Sin descargas. Funciona en iPhone.</p>
     <p class="app-version" id="app-version"></p>
     <button class="btn settings-btn" type="button" id="open-settings">⚙️ Ajustes</button>
 
@@ -75,7 +75,9 @@
       <input id="rom-input" type="file" multiple hidden>
       <input id="lib-search" class="search" type="search" placeholder="Buscar juego…" aria-label="Buscar juego" hidden>
       <div id="lib-empty" class="lib-empty">
-        <p>Aún no tienes juegos. Añade tus ROMs <b>.gba</b>, de Super Nintendo (<b>.sfc</b>, <b>.smc</b>) o <b>.zip</b> (puedes elegir varias a la vez) y se quedarán guardadas aquí.</p>
+        <p>Aún no tienes juegos. Añade tus ROMs (puedes elegir varias a la vez, también en <b>.zip</b>) y se quedarán guardadas aquí:
+          Game Boy Advance <b>.gba</b> · Super Nintendo <b>.sfc .smc</b> · NES <b>.nes</b> · Game Boy y Color <b>.gb .gbc</b> ·
+          Mega Drive <b>.md .gen .bin</b> · Master System <b>.sms</b> · Game Gear <b>.gg</b>.</p>
         <label class="btn primary big" for="rom-input">🎮 Añadir juegos</label>
       </div>
       <div id="lib-grid" class="lib-grid"></div>
@@ -103,6 +105,23 @@
       </div>
       <p class="hint">Si tu amigo te invita a <b>jugar juntos</b>, te pediremos que cargues tu propia ROM. Si solo comparte su pantalla, no necesitas nada.</p>
     </form>
+
+    <details class="help coop">
+      <summary>🤝 Juegos para jugar juntos online</summary>
+      <p>Los dos necesitáis <b>la misma ROM</b> (misma versión). Invita a tu amigo desde tu lista de amigos con el juego abierto.</p>
+      <h4>Game Boy Advance · cable link</h4>
+      <p>Cada uno con su partida: <b>Pokémon Rubí, Zafiro, Esmeralda, Rojo Fuego y Verde Hoja</b> (y hacks hechos sobre ellos) para intercambiar y combatir en el Centro Pokémon; <b>Pokémon Quetzal</b> con su modo cooperativo; <b>Advance Wars 1 y 2</b>.</p>
+      <h4>Super Nintendo · los dos a la vez (mando 1 y 2)</h4>
+      <p>Super Mario Kart · Donkey Kong Country 2 y 3 (modo equipo) · Super Bomberman 1–5 · Contra III · Kirby Super Star · Secret of Mana · Street Fighter II · Turtles in Time · Sunset Riders · Zombies Ate My Neighbors · Goof Troop · Pocky &amp; Rocky. <small>(Super Mario World y Super Mario All-Stars: por turnos.)</small></p>
+      <h4>NES · los dos a la vez</h4>
+      <p>Contra · Super C · Double Dragon II · River City Ransom · Battletoads &amp; Double Dragon · Bubble Bobble · Ice Climber · TMNT II y III · Chip 'n Dale Rescue Rangers · Tecmo Bowl. <small>(Super Mario Bros. 1 y 3: por turnos.)</small></p>
+      <h4>Mega Drive · los dos a la vez</h4>
+      <p>Streets of Rage 1, 2 y 3 · Sonic 2 y Sonic 3 (con Tails) · Gunstar Heroes · Golden Axe · TMNT: The Hyperstone Heist · Contra: Hard Corps · ToeJam &amp; Earl · Mortal Kombat.</p>
+      <h4>Game Boy / Color, Master System y Game Gear</h4>
+      <p>Por ahora solo para jugar solo (el cable link de Game Boy no está en el online).</p>
+      <h4>Hacks y traducciones</h4>
+      <p>Muchos juegos tienen <b>traducción al español</b> o <b>hacks</b> hechos por fans en forma de parche (.ips, .ups o .bps). Búscalo como «<i>nombre del juego</i> traducción español parche» y aplícalo desde el <b>⋯</b> del juego → <b>🩹 Aplicar parche</b>. Si un hack de una de estas consolas trae su propio modo de dos jugadores, también funciona online.</p>
+    </details>
 
     <details class="help">
       <summary>¿Cómo instalarlo como app?</summary>
@@ -444,11 +463,14 @@
     <button class="btn primary" data-gs="play">▶ Jugar</button>
     <button class="btn" data-gs="saves">📂 Partidas <small id="gs-saves-count"></small></button>
     <div class="grid">
+      <button class="btn" data-gs="patch">🩹 Aplicar parche</button>
       <button class="btn" data-gs="rename">✏️ Renombrar</button>
       <button class="btn" data-gs="export">💾 Exportar partida</button>
       <button class="btn" data-gs="cover">🖼️ Quitar portada</button>
       <button class="btn danger" data-gs="delete">🗑️ Eliminar</button>
     </div>
+    <p class="hint">🩹 <b>Parche</b>: traducciones al español, mejoras o hacks (.ips, .ups o .bps, también dentro de un .zip). Se crea una copia del juego con el parche; el original no se toca.</p>
+    <input id="patch-input" type="file" hidden>
     <button class="btn" data-gs="close">Cerrar</button>
   </div>
 </div>
@@ -458,6 +480,7 @@
 <script src="vendor/peerjs/peerjs.min.js"></script>
 <script src="vendor/fflate/fflate.min.js"></script>
 <script src="renderer.js"></script>
+<script src="patch.js"></script>
 <script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
