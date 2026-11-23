@@ -35,7 +35,7 @@ function applySystemLook(sys) {
   $(".bz-snes").innerHTML = sys === "gba" ? "" : `PIXEL<em>${def.tag}</em>`;
 }
 const PEER_PREFIX = "gbaweb-v2-";
-const APP_VERSION = "2026.11.15";   // se ve en la portada; sube al publicar cambios del multijugador
+const APP_VERSION = "2026.11.23";   // se ve en la portada; sube al publicar cambios del multijugador
 const ICE_BASE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
@@ -638,6 +638,7 @@ async function startGame(file, record, pid) {
     engine = await GbaEngine.create(SYSTEMS[system].core, $("#game"), system);
     engine.aspect = SYSTEMS[system].aspect;
     applyGraphics();
+    romBytes = rom.data;
     const ext = (/\.[a-z0-9]+$/i.exec(rom.name) || [".bin"])[0].toLowerCase();
     if (!engine.load(rom.data, bios, "/rom" + ext)) throw new Error("El emulador no pudo abrir este juego.");
     const saved = await safeGet("saves", saveKey);
@@ -843,8 +844,9 @@ function linkActive() {
 }
 
 // Modo de la sala "Jugar juntos": cable link (GBA) o dos mandos sincronizados (Super Nintendo).
-const isRoomMode = (mode) => mode === "link" || mode === "sync";
-const roomMode = () => (system === "gba" ? "link" : "sync");
+const isRoomMode = (mode) => mode === "link" || mode === "sync" || mode === "share";
+// Si el juego tiene modo cooperativo compartido (Zelda, Super Metroid…), se usa ese.
+const roomMode = () => (share.detect() ? "share" : system === "gba" ? "link" : "sync");
 
 function ffAllowed() {
   return !net.role;
@@ -1647,6 +1649,91 @@ const sync = {
   },
 };
 
+
+/* ---------- Cooperativo compartido (emu-coop) ----------
+ * Cada uno juega su partida y se comparten los objetos y el progreso (ver coop.js). */
+let romBytes = null;   // la ROM en curso, para reconocer el juego
+
+// Acceso a la memoria del juego con las direcciones de la consola (como en emu-coop).
+function coopMem() {
+  const ex = engine.ex;
+  const ram = () => new Uint8Array(ex.memory.buffer, ex.fe_ram_data(), ex.fe_ram_size());
+  const rom = romBytes;
+  const romBase = system === "nes" ? 16 + ((rom[6] & 4) ? 512 : 0) : (rom.length % 1024 === 512 ? 512 : 0);
+  const romOffset = (addr) => {
+    if (system === "nes") return romBase + rom[4] * 16384 - 0x4000 + ((addr & 0xFFFF) - 0xC000);
+    const bank = (addr >>> 16) & 0x7F, off = addr & 0xFFFF;   // LoROM
+    return romBase + bank * 0x8000 + (off - 0x8000);
+  };
+  const ramOffset = (addr) => {
+    if (system === "nes") return addr < 0x2000 ? addr & 0x7FF : -1;
+    const bank = addr >>> 16, off = addr & 0xFFFF;
+    if (bank === 0x7E || bank === 0x7F) return addr - 0x7E0000;
+    if ((bank < 0x40 || (bank >= 0x80 && bank < 0xC0)) && off < 0x2000) return off;
+    return -1;
+  };
+  const byte = (addr) => {
+    const o = ramOffset(addr);
+    if (o >= 0) return ram()[o];
+    const r = romOffset(addr);
+    return r >= 0 && r < rom.length ? rom[r] : 0;
+  };
+  return {
+    read(addr, size = 1) {
+      let v = 0;
+      for (let i = size - 1; i >= 0; i--) v = v * 256 + byte(addr + i);   // little-endian
+      return v;
+    },
+    write(addr, value, size = 1) {
+      const view = ram();
+      for (let i = 0; i < size; i++) {
+        const o = ramOffset(addr + i);
+        if (o >= 0) view[o] = (value >>> (8 * i)) & 0xFF;
+      }
+    },
+    romString(addr, len) {
+      const o = romOffset(addr);
+      return o >= 0 ? String.fromCharCode(...rom.subarray(o, o + len)) : "";
+    },
+  };
+}
+
+const share = {
+  coop: null,
+  conn: null,
+  detect() {
+    if (!engine || !romBytes || !window.Coop || !engine.ex.fe_ram_data) return null;
+    try { return Coop.CoopSync.detect(system, coopMem()); } catch (e) { return null; }
+  },
+  begin(conn) {
+    const mode = this.detect();
+    if (!mode) return toast("Este juego no tiene modo cooperativo compartido");
+    this.conn = conn;
+    this.coop = new Coop.CoopSync(mode, coopMem(), (m) => this.send(m), (t) => toast(t, 3500));
+    this.send({ t: "coop-hello", id: mode.id });
+    engine.onFrame = () => {
+      pollGamepads();
+      if (this.coop) try { this.coop.tick(); } catch (e) { console.warn(e); }
+    };
+  },
+  send(m) {
+    if (this.conn && this.conn.open) this.conn.send(JSON.stringify(m));
+  },
+  onMessage(m) {
+    if (!this.coop) return;
+    if (m.t === "coop-hello") {
+      if (m.id !== this.coop.mode.id) toast("Ojo: tu amigo tiene otra versión del juego; puede que no se compartan bien los objetos.", 6000);
+    } else if (m.t === "coop") {
+      try { this.coop.receive(m); } catch (e) { console.warn(e); }
+    }
+  },
+  stop() {
+    this.coop = null;
+    this.conn = null;
+    if (engine) engine.onFrame = pollGamepads;
+  },
+};
+
 const net = {
   role: null,   // "host" | "guest" (link) | "viewer" (screen)
   mode: null,   // "link" | "screen"
@@ -1686,7 +1773,9 @@ const net = {
     const isHost = this.role === "host";
     $("#mp-code-box").hidden = !isHost;
     $("#guest-control-row").hidden = !(isHost && this.mode === "screen");
-    $("#mp-mode").textContent = this.mode === "sync"
+    $("#mp-mode").textContent = this.mode === "share"
+      ? `🤝 Cooperativo compartido (${(share.coop || {}).mode ? share.coop.mode.name : "juego compatible"}): cada uno juega su partida y lo que consigue uno lo tiene también el otro.`
+      : this.mode === "sync"
       ? (isHost ? "Eres el mando 1. Invita a un amigo: será el mando 2 y jugaréis la misma partida a la vez." : "Estás en la partida de tu amigo con el mando 2. Lo que guardes lo guarda él.")
       : this.mode === "link"
       ? (isHost ? "Eres el anfitrión. Invita a tus amigos (hasta 4) y, cuando estéis, invitaos desde el menú multijugador del juego." : "Estás en la sala de tu amigo. Ya podéis invitaros desde el menú multijugador del juego.")
@@ -1768,6 +1857,7 @@ const net = {
       this.names.delete(id);
       if (this.mode === "link") engine.netDisconnected(id);
       else if (this.mode === "sync") sync.stop();
+      else if (this.mode === "share") share.stop();
       else {
         if (this.call) this.call.close();
         this.call = null;
@@ -1795,8 +1885,10 @@ const net = {
       if (this.mode === "screen") this.call = this.peer.call(conn.peer, buildStream());
       setNetStatus(`👥 ${this.conns.size + 1} jugadores`, "ok");
       toast(this.mode === "link" ? `¡${guestNick} ha entrado en la sala! Invitaos desde el menú multijugador del juego.`
-        : this.mode === "sync" ? `¡${guestNick} se ha unido con el mando 2!` : `¡${guestNick} se ha unido!`, 5000);
+        : this.mode === "sync" ? `¡${guestNick} se ha unido con el mando 2!`
+        : this.mode === "share" ? `¡${guestNick} se ha unido! Compartís objetos y progreso.` : `¡${guestNick} se ha unido!`, 5000);
       if (this.mode === "sync") sync.begin(conn, "host");
+      if (this.mode === "share") share.begin(conn);
       this.updateRoster();
     };
     conn.on("open", () => {
@@ -1810,6 +1902,7 @@ const net = {
         if (!m) return;
         if (m.nick) guestNick = String(m.nick).slice(0, 20);
         if (m.t === "ready" && isRoomMode(this.mode) && !id) admit();
+        else if ((m.t === "coop" || m.t === "coop-hello") && id && this.mode === "share") share.onMessage(m);
         else if (m.t === "viewer" && this.mode === "screen" && id) {
           this.names.set(id, guestNick);
           this.updateRoster();
@@ -1864,6 +1957,7 @@ const net = {
         if (this.conn !== conn) return;
         if (this.mode === "link" && this.role === "guest") engine.netStop();
         if (this.mode === "sync") sync.stop();
+        if (this.mode === "share") share.stop();
         lastNetError = "Se perdió la conexión con tu amigo. Podéis volver a invitaros desde la lista de amigos.";
         setNetStatus("Desconectado", "bad");
         if (this.role === "viewer") screenMsg("La partida ha terminado o se perdió la conexión.");
@@ -1928,6 +2022,7 @@ const net = {
     }
     const m = parseJSON(msg);
     if (!m) return;
+    if ((m.t === "coop" || m.t === "coop-hello") && this.mode === "share") return share.onMessage(m);
     if (m.t === "hello") {
       this.mode = m.mode;
       this.hostGame = m.game;
@@ -1936,7 +2031,13 @@ const net = {
       else if (engine) this.sendReady();
       else this.waitForRom(m.game);
     } else if (m.t === "welcome") {
-      if (this.mode === "sync") {
+      if (this.mode === "share") {
+        this.role = "guest";
+        share.begin(this.conn);
+        friends.broadcastStatus();
+        setNetStatus("🤝 Cooperativo compartido", "ok");
+        toast(`¡Conectado con ${this.hostNick}! Lo que consiga uno lo tendrá también el otro.`, 5000);
+      } else if (this.mode === "sync") {
         this.role = "guest";
         sync.begin(this.conn, "guest");
         friends.broadcastStatus();
@@ -2010,6 +2111,7 @@ const net = {
   stop(silent) {
     if (engine && this.mode === "link") engine.netStop();
     if (this.mode === "sync") sync.stop();
+    if (this.mode === "share") share.stop();
     if (this.call) this.call.close();
     if (this.conn) this.conn.close();
     for (const conn of this.conns.values()) conn.close();
@@ -2707,7 +2809,7 @@ function renderLobby() {
   if (!show) return;
   box.innerHTML = "";
   const players = net.roster.length ? net.roster : [{ id: 0, nick: net.hostNick || "Anfitrión" }];
-  for (let i = 0; i < (net.mode === "sync" ? 2 : 4); i++) {
+  for (let i = 0; i < (net.mode === "link" ? 4 : 2); i++) {
     const p = players[i];
     const slot = document.createElement("div");
     slot.className = "slot-card" + (p ? " taken" : "") + (p && p.id === 0 ? " host" : "");

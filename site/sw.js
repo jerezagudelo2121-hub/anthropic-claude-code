@@ -13,6 +13,7 @@ const CORE = [
   "engine.js",
   "renderer.js",
   "patch.js",
+  "coop.js",
   "gpsp/gpsp.wasm",
   "snes/snes9x.wasm",
   "vendor/peerjs/peerjs.min.js",

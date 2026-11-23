@@ -23,6 +23,10 @@ Incluye **multijugador online** para jugar con un amigo.
 - **Más consolas**: NES (`.nes`), Game Boy y Game Boy Color (`.gb`, `.gbc`), Mega Drive (`.md`, `.gen`,
   `.bin`), Master System (`.sms`) y Game Gear (`.gg`), cada una con su proporción de pantalla y sus botones
   (Mega Drive: A, B, C, X, Y, Z y MODE). En NES y Mega Drive también hay **online a dos mandos**.
+- **🤝 Cooperativo compartido** (port de emu-coop a JavaScript, `site/coop.js`): en juegos de un jugador,
+  cada uno juega su partida y se comparten objetos y progreso. Juegos: Zelda: A Link to the Past (JP 1.0 y
+  americano; el americano no lo probaron los autores originales), su Randomizer, Super Metroid y The Legend
+  of Zelda (NES). Se activa solo al invitar con uno de esos juegos.
 - **🩹 Aplicar parche** (⋯ del juego): traducciones al español, mejoras o hacks en `.ips`, `.ups` o `.bps`
   (también dentro de un `.zip`). Crea una copia del juego parcheada; avisa si el parche es para otra versión.
 - **🤝 Juegos para jugar juntos**: lista en el inicio de juegos con cable link o dos mandos a la vez.
@@ -191,6 +195,8 @@ Para recompilar los núcleos: `wasm/build.sh` y `wasm/build_snes.sh` (necesitan 
 - [SameBoy](https://github.com/libretro/SameBoy) (MIT, con sus boot ROMs libres), commit `aa158a8` — `site/cores/gb.wasm`.
 - [Genesis Plus GX](https://github.com/libretro/Genesis-Plus-GX) (licencia propia, uso no comercial), commit
   `b9c2316` — `site/cores/md.wasm`. Las licencias están junto a cada núcleo en `site/cores/`.
+- [emu-coop](https://github.com/mcclure/emu-coop) 1.2 — Copyright (C) 2017 Andi McClure, licencia MIT
+  (los modos de juego son CC0, de Andi McClure y megmacattack). Pasado a JavaScript en `site/coop.js`.
 - [PeerJS](https://peerjs.com) 1.5.5 (MIT) — `site/vendor/peerjs`
 - [fflate](https://github.com/101arrowz/fflate) 0.8.2 (MIT) — `site/vendor/fflate`, para abrir ROMs `.zip`.
 
