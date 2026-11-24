@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Salta Dúo</title>
+<meta name="description" content="Plataformas cooperativo original: salta, recoge estrellas y vence al jefe, solo o con un amigo online.">
+<meta name="theme-color" content="#1b1440">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- Marcador -->
+<header class="hud" id="hud" hidden>
+  <button class="hbtn" id="btn-pause" aria-label="Pausa">❚❚</button>
+  <span class="pill" id="hud-level"></span>
+  <span class="pill">🪙 <b id="hud-coins">0</b></span>
+  <span class="pill" id="hud-stars">☆☆☆</span>
+  <span class="pill net" id="hud-net" hidden></span>
+</header>
+
+<!-- Mando táctil -->
+<div class="pad" id="pad" hidden>
+  <div class="arrows">
+    <button class="key" data-k="left" aria-label="Izquierda">◀</button>
+    <button class="key" data-k="right" aria-label="Derecha">▶</button>
+  </div>
+  <div class="acts">
+    <button class="key run" data-k="run">B<small>Correr</small></button>
+    <button class="key jump" data-k="jump">A<small>Saltar</small></button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- Pantallas -->
+<section class="screen" id="scr-title">
+  <div class="card">
+    <h1>Salta <span>Dúo</span></h1>
+    <p class="sub">Plataformas cooperativo. Juega solo o con un amigo, <b>los dos a la vez</b>.</p>
+    <canvas id="title-art" width="160" height="60"></canvas>
+    <button class="btn primary big" id="go-solo">▶ Jugar solo</button>
+    <button class="btn big" id="go-online">👥 Jugar con un amigo</button>
+    <details class="howto">
+      <summary>¿Cómo se juega?</summary>
+      <ul>
+        <li><b>◀ ▶</b> moverse · <b>A</b> saltar (mantén para saltar más) · <b>B</b> correr.</li>
+        <li>Salta encima de los enemigos para vencerlos. Los de <b>pinchos</b> no se pueden pisar.</li>
+        <li>Recoge <b>monedas</b> y las <b>3 estrellas</b> de cada nivel. Los <b>muelles</b> te lanzan muy alto.</li>
+        <li>Con un amigo: <b>saltad uno sobre la cabeza del otro</b> para llegar más alto. Las <b>puertas</b> se abren mientras alguien pisa su <b>botón</b>.</li>
+        <li>Si te caes, vuelves a la última <b>bandera</b>. El nivel acaba cuando todos llegan a la meta.</li>
+        <li>Teclado: flechas, Z o espacio para saltar, X para correr.</li>
+      </ul>
+    </details>
+    <a class="back" href="../../">⟵ Volver al emulador</a>
+    <p class="hint credits">Juego original: personajes, niveles, dibujos y música hechos con código.</p>
+  </div>
+</section>
+
+<section class="screen" id="scr-online" hidden>
+  <div class="card">
+    <h2>👥 Jugar con un amigo</h2>
+    <button class="btn primary big" id="go-host">Crear sala</button>
+    <div class="code-box" id="host-box" hidden>
+      <p>Código de la sala</p>
+      <div class="code" id="room-code">······</div>
+      <button class="btn" id="share-room">📤 Enviar a mi amigo</button>
+      <p class="hint" id="host-status">Esperando a tu amigo…</p>
+    </div>
+    <form class="join" id="join-form">
+      <input id="join-code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="CÓDIGO">
+      <button class="btn" type="submit">Unirme</button>
+    </form>
+    <p class="hint">Uno crea la sala y le pasa el código (o el enlace) al otro. Cada uno juega en su móvil.</p>
+    <button class="btn ghost" data-back>⟵ Atrás</button>
+  </div>
+</section>
+
+<section class="screen" id="scr-map" hidden>
+  <div class="card wide">
+    <h2>🗺️ Elige nivel</h2>
+    <p class="hint" id="map-total"></p>
+    <p class="hint" id="map-hint"></p>
+    <div class="levels" id="levels"></div>
+    <button class="btn ghost" data-back>⟵ Salir</button>
+  </div>
+</section>
+
+<section class="screen" id="scr-pause" hidden>
+  <div class="card">
+    <h2>Pausa</h2>
+    <button class="btn primary big" id="resume">▶ Seguir</button>
+    <button class="btn" id="restart">🔄 Reiniciar nivel</button>
+    <button class="btn" id="to-map">🗺️ Elegir nivel</button>
+    <label class="toggle"><input type="checkbox" id="opt-music" checked> Música</label>
+    <label class="toggle"><input type="checkbox" id="opt-sfx" checked> Sonidos</label>
+    <button class="btn ghost" id="to-title">⟵ Salir</button>
+  </div>
+</section>
+
+<section class="screen" id="scr-clear" hidden>
+  <div class="card">
+    <h2 id="clear-title">¡Nivel superado!</h2>
+    <p class="big-stars" id="clear-stars"></p>
+    <p id="clear-info"></p>
+    <button class="btn primary big" id="clear-next">▶ Siguiente nivel</button>
+    <button class="btn" id="clear-map">🗺️ Elegir nivel</button>
+  </div>
+</section>
+
+<script src="../../vendor/peerjs/peerjs.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
