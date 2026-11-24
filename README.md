@@ -48,6 +48,20 @@ Incluye **multijugador online** para jugar con un amigo.
 - Se puede añadir a la pantalla de inicio y se abre a pantalla completa, como una app.
 - Tus ROMs y partidas **se quedan en tu dispositivo**, nunca se suben a internet.
 
+## 🌐 Juego incluido: Salta Dúo
+
+En el inicio, **🌐 Juegos web → Salta Dúo** (`site/juegos/saltaduo/`): plataformas cooperativo original.
+Tuki y Tako recorren 6 niveles (pradera, bosque, cueva, valle de pinchos, nubes y el castillo del jefe,
+el Gran Blob), generados con una semilla fija y comprobados para que se puedan terminar y coger las 3
+estrellas de cada uno.
+
+- Solo o **con un amigo online, los dos a la vez** (sala con código o enlace; WebRTC con plan B por el
+  servidor de PeerJS). Cada uno mueve su personaje en su móvil; el anfitrión manda en enemigos y puertas.
+- Saltar sobre la cabeza del compañero, **puertas que se abren mientras alguien pisa su botón**, muelles,
+  banderas de control, monedas, 3 estrellas por nivel, jefe final con 5 vidas.
+- Menú, mapa de niveles con estrellas, pausa (reiniciar, elegir nivel, música y sonidos), consejos en el
+  primer nivel, guardado automático, final con créditos. Funciona en vertical y en horizontal.
+
 ## 🌐 Juego incluido: Pixelterra
 
 En la pantalla de inicio, **🌐 Juegos web → Pixelterra** (`site/juegos/pixelterra/`): un juego

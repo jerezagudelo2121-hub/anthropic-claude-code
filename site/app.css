@@ -758,3 +758,6 @@ body.nolr .shoulder { display: none; }
 
 .coop h4 { margin: 12px 0 2px; font-size: 14px; }
 .coop p { margin: 4px 0; }
+
+.game-link.saltaduo { background: radial-gradient(80% 120% at 0% 0%, #ff9a3b, transparent 70%), linear-gradient(135deg, #3a2a8a, #1b1440); }
+.game-link.saltaduo .game-link-go { background: #ffb03b; color: #3a1d00; }
